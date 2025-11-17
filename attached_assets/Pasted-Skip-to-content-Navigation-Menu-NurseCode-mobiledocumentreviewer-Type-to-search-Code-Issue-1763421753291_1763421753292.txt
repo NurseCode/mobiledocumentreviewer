@@ -1,0 +1,145 @@
+Skip to content
+Navigation Menu
+NurseCode
+mobiledocumentreviewer
+
+Type / to search
+Code
+Issues
+Pull requests
+Actions
+Projects
+Security
+Insights
+Settings
+Build Android APK/AAB
+Update build configuration and address manifest warnings #12
+Jobs
+Run details
+Annotations
+1 error
+build
+failed 2 minutes ago in 11m 32s
+Search logs
+2s
+2s
+0s
+0s
+0s
+0s
+0s
+22s
+0s
+0s
+1m 54s
+7m 44s
+1m 23s
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:249)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:109)
+	at org.gradle.composite.internal.DefaultBuildController.doRun(DefaultBuildController.java:181)
+	at org.gradle.composite.internal.DefaultBuildController.access$000(DefaultBuildController.java:50)
+	at org.gradle.composite.internal.DefaultBuildController$BuildOpRunnable.run(DefaultBuildController.java:200)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:47)
+Caused by: com.android.tools.r8.CompilationFailedException: Compilation failed to complete
+	at Version.fakeStackEntry(Version_8.2.47.java:0)
+	at com.android.tools.r8.T.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:5)
+	at com.android.tools.r8.utils.S0.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:82)
+	at com.android.tools.r8.utils.S0.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:32)
+	at com.android.tools.r8.utils.S0.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:31)
+	at com.android.tools.r8.R8.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:18)
+	at com.android.tools.r8.R8.run(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:3)
+	at com.android.builder.dexing.R8Tool.runR8(r8Tool.kt:335)
+	at com.android.build.gradle.internal.tasks.R8Task$Companion.shrink(R8Task.kt:730)
+	at com.android.build.gradle.internal.tasks.R8Task$R8Runnable.execute(R8Task.kt:806)
+	at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:63)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:66)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:62)
+	at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:100)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:62)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+	at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:199)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+	at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+	at org.gradle.internal.operations.DefaultBuildOperationExecutor.call(DefaultBuildOperationExecutor.java:73)
+	at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+	at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:59)
+	at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:170)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:187)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:120)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:162)
+	at org.gradle.internal.Factories$1.create(Factories.java:31)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:249)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:109)
+	at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:114)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:157)
+	at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:126)
+	... 2 more
+Caused by: com.android.tools.r8.utils.b: Missing class com.gemalto.jp2.JP2Decoder (referenced from: android.graphics.Bitmap com.tom_roush.pdfbox.filter.JPXFilter.readJPX(java.io.InputStream, com.tom_roush.pdfbox.filter.DecodeOptions, com.tom_roush.pdfbox.filter.DecodeResult))
+Missing class com.gemalto.jp2.JP2Encoder (referenced from: void com.tom_roush.pdfbox.filter.JPXFilter.encode(java.io.InputStream, java.io.OutputStream, com.tom_roush.pdfbox.cos.COSDictionary))
+	at com.android.tools.r8.utils.Q2.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:21)
+	at com.android.tools.r8.utils.Q2.error(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:1)
+	at com.android.tools.r8.shaking.M.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:1925)
+	at com.android.tools.r8.shaking.M.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:1618)
+	at com.android.tools.r8.R8.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:2299)
+	at com.android.tools.r8.R8.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:159)
+	at com.android.tools.r8.R8.b(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:1)
+	at com.android.tools.r8.utils.S0.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:28)
+	... 34 more
+	Suppressed: java.lang.RuntimeException: com.android.tools.r8.utils.b: Missing class com.gemalto.jp2.JP2Decoder (referenced from: android.graphics.Bitmap com.tom_roush.pdfbox.filter.JPXFilter.readJPX(java.io.InputStream, com.tom_roush.pdfbox.filter.DecodeOptions, com.tom_roush.pdfbox.filter.DecodeResult))
+Missing class com.gemalto.jp2.JP2Encoder (referenced from: void com.tom_roush.pdfbox.filter.JPXFilter.encode(java.io.InputStream, java.io.OutputStream, com.tom_roush.pdfbox.cos.COSDictionary))
+		at com.android.tools.r8.utils.Q2.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:29)
+		at com.android.tools.r8.shaking.M.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:1927)
+		at com.android.tools.r8.shaking.M.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:1618)
+		at com.android.tools.r8.R8.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:2299)
+		at com.android.tools.r8.R8.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:159)
+		at com.android.tools.r8.R8.b(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:1)
+		at com.android.tools.r8.utils.S0.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:28)
+		at com.android.tools.r8.R8.a(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:18)
+		at com.android.tools.r8.R8.run(R8_8.2.47_115170b0e238ab4c8fd3abe4aa31d20c98f8a77f61775e861794cc2d75fbdf13:3)
+		at com.android.builder.dexing.R8Tool.runR8(r8Tool.kt:335)
+		at com.android.build.gradle.internal.tasks.R8Task$Companion.shrink(R8Task.kt:730)
+		at com.android.build.gradle.internal.tasks.R8Task$R8Runnable.execute(R8Task.kt:806)
+		at org.gradle.workers.internal.DefaultWorkerServer.execute(DefaultWorkerServer.java:63)
+		at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:66)
+		at org.gradle.workers.internal.NoIsolationWorkerFactory$1$1.create(NoIsolationWorkerFactory.java:62)
+		at org.gradle.internal.classloader.ClassLoaderUtils.executeInClassloader(ClassLoaderUtils.java:100)
+		at org.gradle.workers.internal.NoIsolationWorkerFactory$1.lambda$execute$0(NoIsolationWorkerFactory.java:62)
+		at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:44)
+		at org.gradle.workers.internal.AbstractWorker$1.call(AbstractWorker.java:41)
+		at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:204)
+		at org.gradle.internal.operations.DefaultBuildOperationRunner$CallableBuildOperationWorker.execute(DefaultBuildOperationRunner.java:199)
+		at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:66)
+		at org.gradle.internal.operations.DefaultBuildOperationRunner$2.execute(DefaultBuildOperationRunner.java:59)
+		at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:157)
+		at org.gradle.internal.operations.DefaultBuildOperationRunner.execute(DefaultBuildOperationRunner.java:59)
+		at org.gradle.internal.operations.DefaultBuildOperationRunner.call(DefaultBuildOperationRunner.java:53)
+		at org.gradle.internal.operations.DefaultBuildOperationExecutor.call(DefaultBuildOperationExecutor.java:73)
+		at org.gradle.workers.internal.AbstractWorker.executeWrappedInBuildOperation(AbstractWorker.java:41)
+		at org.gradle.workers.internal.NoIsolationWorkerFactory$1.execute(NoIsolationWorkerFactory.java:59)
+		at org.gradle.workers.internal.DefaultWorkerExecutor.lambda$submitWork$0(DefaultWorkerExecutor.java:170)
+		at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:264)
+		at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runExecution(DefaultConditionalExecutionQueue.java:187)
+		at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.access$700(DefaultConditionalExecutionQueue.java:120)
+		at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner$1.run(DefaultConditionalExecutionQueue.java:162)
+		at org.gradle.internal.Factories$1.create(Factories.java:31)
+		at org.gradle.internal.work.DefaultWorkerLeaseService.withLocks(DefaultWorkerLeaseService.java:249)
+		at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:109)
+		at org.gradle.internal.work.DefaultWorkerLeaseService.runAsWorkerThread(DefaultWorkerLeaseService.java:114)
+		at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.runBatch(DefaultConditionalExecutionQueue.java:157)
+		at org.gradle.internal.work.DefaultConditionalExecutionQueue$ExecutionRunner.run(DefaultConditionalExecutionQueue.java:126)
+		at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:539)
+0s
+0s
+0s
+0s
+0s
+1s
+1s
+0s
+Update build configuration and address manifest warnings · NurseCode/mobiledocumentreviewer@3a591f4 
