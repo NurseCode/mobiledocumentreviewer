@@ -151,6 +151,10 @@ class PdfViewModel(
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Initialize PDFBox for Android
+        ImageToPdfUtils.initialize(this)
+        
         setContent {
             PdfComposerTheme {
                 Surface(
@@ -371,6 +375,8 @@ fun DocumentCard(document: PdfDocument, viewModel: PdfViewModel) {
 @Composable
 fun ScanScreen(viewModel: PdfViewModel) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    
     var hasCameraPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -380,17 +386,63 @@ fun ScanScreen(viewModel: PdfViewModel) {
         )
     }
     
+    var showCamera by remember { mutableStateOf(false) }
+    var isProcessing by remember { mutableStateOf(false) }
+    var processingMessage by remember { mutableStateOf("") }
+    
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         hasCameraPermission = isGranted
+        if (isGranted) {
+            showCamera = true
+        }
     }
     
     val imagePickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
-            // Handle image to PDF conversion
+            scope.launch {
+                isProcessing = true
+                processingMessage = "Converting image to PDF..."
+                
+                try {
+                    // Create temp file from URI
+                    val inputStream = context.contentResolver.openInputStream(it)
+                    val tempImageFile = File(context.cacheDir, "temp_image.jpg")
+                    inputStream?.use { input ->
+                        tempImageFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    
+                    // Convert to PDF
+                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                    val pdfFile = File(context.cacheDir, "scanned_$timestamp.pdf")
+                    
+                    val result = ImageToPdfUtils.imageToPdf(context, tempImageFile, pdfFile)
+                    result.onSuccess { pdf ->
+                        // Save via SAF
+                        val savedUri = StorageUtils.saveFile(
+                            context,
+                            Uri.fromFile(pdf),
+                            "scanned_$timestamp.pdf",
+                            "application/pdf"
+                        )
+                        
+                        savedUri?.let { uri ->
+                            viewModel.addDocument("scanned_$timestamp.pdf", uri.toString(), 1)
+                        }
+                    }
+                    
+                    tempImageFile.delete()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    isProcessing = false
+                }
+            }
         }
     }
     
@@ -410,66 +462,156 @@ fun ScanScreen(viewModel: PdfViewModel) {
         }
     }
     
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            Icons.Default.CameraAlt,
-            contentDescription = null,
-            modifier = Modifier.size(120.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        Button(
-            onClick = {
-                if (hasCameraPermission) {
-                    // Launch camera
-                } else {
-                    cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+    if (showCamera) {
+        CameraScreen(
+            onImageCaptured = { imageFile ->
+                showCamera = false
+                scope.launch {
+                    isProcessing = true
+                    processingMessage = "Processing image..."
+                    
+                    try {
+                        // Optimize image for PDF
+                        val optimizedFile = File(context.cacheDir, "optimized_${imageFile.name}")
+                        CameraUtils.optimizeImageForPdf(imageFile, optimizedFile)
+                        
+                        processingMessage = "Performing OCR..."
+                        
+                        // Perform OCR
+                        val ocrResult = CameraUtils.extractTextFromImage(context, optimizedFile)
+                        
+                        processingMessage = "Creating PDF..."
+                        
+                        // Convert to PDF
+                        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                        val pdfFile = File(context.cacheDir, "scan_$timestamp.pdf")
+                        
+                        val result = ImageToPdfUtils.imageToPdf(context, optimizedFile, pdfFile)
+                        result.onSuccess { pdf ->
+                            // Save via SAF
+                            val savedUri = StorageUtils.saveFile(
+                                context,
+                                Uri.fromFile(pdf),
+                                "scan_$timestamp.pdf",
+                                "application/pdf"
+                            )
+                            
+                            savedUri?.let { uri ->
+                                viewModel.addDocument("scan_$timestamp.pdf", uri.toString(), 1)
+                            }
+                            
+                            // Detect document type
+                            ocrResult.onSuccess { ocr ->
+                                val docType = CameraUtils.detectDocumentType(ocr.fullText)
+                                // TODO: If receipt, offer to extract data
+                            }
+                        }
+                        
+                        // Cleanup temp files
+                        optimizedFile.delete()
+                        imageFile.delete()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        isProcessing = false
+                    }
                 }
             },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.CameraAlt, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Scan New Document")
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Button(
-            onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.FolderOpen, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Open Existing PDF")
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        OutlinedButton(
-            onClick = { imagePickerLauncher.launch("image/*") },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Default.PhotoLibrary, contentDescription = null)
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Upload from Gallery")
-        }
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        Text(
-            text = "Scan documents with camera, or open existing PDFs from anywhere (Dropbox, Drive, local storage)",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            onClose = { showCamera = false }
         )
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Icon(
+                    Icons.Default.CameraAlt,
+                    contentDescription = null,
+                    modifier = Modifier.size(120.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                Button(
+                    onClick = {
+                        if (hasCameraPermission) {
+                            showCamera = true
+                        } else {
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isProcessing
+                ) {
+                    Icon(Icons.Default.CameraAlt, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Scan New Document")
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Button(
+                    onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isProcessing
+                ) {
+                    Icon(Icons.Default.FolderOpen, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Open Existing PDF")
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedButton(
+                    onClick = { imagePickerLauncher.launch("image/*") },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isProcessing
+                ) {
+                    Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Upload from Gallery")
+                }
+                
+                Spacer(modifier = Modifier.height(32.dp))
+                
+                Text(
+                    text = "Scan documents with camera, or open existing PDFs from anywhere (Dropbox, Drive, local storage)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            
+            // Processing overlay
+            if (isProcessing) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.7f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card(
+                        modifier = Modifier.padding(32.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator()
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = processingMessage,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
