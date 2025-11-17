@@ -13,3 +13,7 @@
 -dontwarn org.apache.fontbox.**
 -dontwarn javax.activation.**
 -dontwarn java.awt.**
+
+# Ignore optional JPEG2000 dependencies (not needed for our use case)
+-dontwarn com.gemalto.jp2.JP2Decoder
+-dontwarn com.gemalto.jp2.JP2Encoder
