@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick PDF Composer - UI Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 1400px;
+        }
+        
+        .device {
+            background: white;
+            border-radius: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .phone {
+            width: 375px;
+            height: 812px;
+        }
+        
+        .tablet {
+            width: 768px;
+            height: 1024px;
+        }
+        
+        .screen {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background: #fffbfe;
+        }
+        
+        .topbar {
+            background: #eaddff;
+            color: #21005d;
+            padding: 16px 20px;
+            font-size: 20px;
+            font-weight: 500;
+            border-bottom: 1px solid #d0bcff;
+        }
+        
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .navbar {
+            display: flex;
+            justify-content: space-around;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            padding: 8px 0;
+        }
+        
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            padding: 8px 16px;
+            cursor: pointer;
+            color: #625b71;
+            font-size: 12px;
+        }
+        
+        .nav-item.active {
+            color: #6750a4;
+        }
+        
+        .nav-icon {
+            width: 24px;
+            height: 24px;
+            background: currentColor;
+            mask-size: contain;
+            -webkit-mask-size: contain;
+        }
+        
+        .icon-home { mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z'/%3E%3C/svg%3E"); }
+        .icon-camera { mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 15.2c-1.8 0-3.2-1.4-3.2-3.2s1.4-3.2 3.2-3.2 3.2 1.4 3.2 3.2-1.4 3.2-3.2 3.2zM9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z'/%3E%3C/svg%3E"); }
+        .icon-tools { mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'/%3E%3C/svg%3E"); }
+        
+        h2 {
+            color: #1c1b1f;
+            font-size: 28px;
+            margin-bottom: 16px;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #79747e;
+        }
+        
+        .empty-icon {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 16px;
+            background: #6750a4;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M14,2H6A2,2 0 0,0 4,4V20A2,2 0 0,0 6,22H18A2,2 0 0,0 20,20V8L14,2M18,20H6V4H13V9H18V20Z'/%3E%3C/svg%3E");
+            mask-size: contain;
+            -webkit-mask-size: contain;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            background: #6750a4;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+        
+        .card-content {
+            flex: 1;
+        }
+        
+        .card-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #1c1b1f;
+            margin-bottom: 4px;
+        }
+        
+        .card-subtitle {
+            font-size: 14px;
+            color: #79747e;
+        }
+        
+        .btn {
+            background: #6750a4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            justify-content: center;
+            margin-bottom: 12px;
+        }
+        
+        .btn-outline {
+            background: white;
+            color: #6750a4;
+            border: 1px solid #6750a4;
+        }
+        
+        .scan-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+        }
+        
+        .scan-icon {
+            width: 120px;
+            height: 120px;
+            background: #6750a4;
+            mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 15.2c-1.8 0-3.2-1.4-3.2-3.2s1.4-3.2 3.2-3.2 3.2 1.4 3.2 3.2-1.4 3.2-3.2 3.2zM9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z'/%3E%3C/svg%3E");
+            -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'%3E%3Cpath d='M12 15.2c-1.8 0-3.2-1.4-3.2-3.2s1.4-3.2 3.2-3.2 3.2 1.4 3.2 3.2-1.4 3.2-3.2 3.2zM9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9z'/%3E%3C/svg%3E");
+            mask-size: contain;
+            -webkit-mask-size: contain;
+            margin-bottom: 32px;
+        }
+        
+        .scan-buttons {
+            width: 100%;
+            padding: 0 20px;
+        }
+        
+        .info-text {
+            font-size: 12px;
+            color: #79747e;
+            text-align: center;
+            margin-top: 24px;
+        }
+        
+        .tablet .content {
+            display: flex;
+            gap: 20px;
+        }
+        
+        .tablet .nav-rail {
+            width: 80px;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            padding-top: 20px;
+            gap: 8px;
+        }
+        
+        .tablet .main-content {
+            flex: 1;
+        }
+        
+        .device-label {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Phone Preview -->
+        <div class="device phone">
+            <div class="device-label">Phone View (375x812)</div>
+            <div class="screen">
+                <div class="topbar">Quick PDF Composer</div>
+                <div class="content">
+                    <h2>Recent Documents</h2>
+                    <div class="empty-state">
+                        <div class="empty-icon"></div>
+                        <div style="font-size: 16px; margin-bottom: 8px; color: #1c1b1f;">No documents yet</div>
+                        <div>Scan or upload a document to get started</div>
+                    </div>
+                </div>
+                <div class="navbar">
+                    <div class="nav-item active">
+                        <div class="nav-icon icon-home"></div>
+                        <span>Home</span>
+                    </div>
+                    <div class="nav-item">
+                        <div class="nav-icon icon-camera"></div>
+                        <span>Scan</span>
+                    </div>
+                    <div class="nav-item">
+                        <div class="nav-icon icon-tools"></div>
+                        <span>Tools</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tablet Preview -->
+        <div class="device tablet">
+            <div class="device-label">Tablet View (768x1024)</div>
+            <div class="screen">
+                <div class="topbar">Quick PDF Composer</div>
+                <div class="content">
+                    <div class="nav-rail">
+                        <div class="nav-item active">
+                            <div class="nav-icon icon-home"></div>
+                            <span>Home</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon icon-camera"></div>
+                            <span>Scan</span>
+                        </div>
+                        <div class="nav-item">
+                            <div class="nav-icon icon-tools"></div>
+                            <span>Tools</span>
+                        </div>
+                    </div>
+                    <div class="main-content">
+                        <h2>PDF Tools</h2>
+                        <div class="card">
+                            <div class="card-icon">📄</div>
+                            <div class="card-content">
+                                <div class="card-title">Merge PDFs</div>
+                                <div class="card-subtitle">Combine multiple PDF files into one</div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon">✂️</div>
+                            <div class="card-content">
+                                <div class="card-title">Split PDF</div>
+                                <div class="card-subtitle">Extract pages or split into multiple files</div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon">🗜️</div>
+                            <div class="card-content">
+                                <div class="card-title">Compress PDF</div>
+                                <div class="card-subtitle">Reduce file size while maintaining quality</div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon">📝</div>
+                            <div class="card-content">
+                                <div class="card-title">OCR Text Extract</div>
+                                <div class="card-subtitle">Extract text from scanned documents</div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon">✏️</div>
+                            <div class="card-content">
+                                <div class="card-title">Annotate & Draw</div>
+                                <div class="card-subtitle">Add notes, highlights, and drawings</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
