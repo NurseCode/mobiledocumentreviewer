@@ -386,7 +386,7 @@ fun ScanScreen(viewModel: PdfViewModel) {
         )
     }
     
-    var showCamera by remember { mutableStateOf(false) }
+    var showMultiPageScan by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
     var processingMessage by remember { mutableStateOf("") }
     
@@ -395,7 +395,7 @@ fun ScanScreen(viewModel: PdfViewModel) {
     ) { isGranted ->
         hasCameraPermission = isGranted
         if (isGranted) {
-            showCamera = true
+            showMultiPageScan = true
         }
     }
     
@@ -462,31 +462,44 @@ fun ScanScreen(viewModel: PdfViewModel) {
         }
     }
     
-    if (showCamera) {
-        CameraScreen(
-            onImageCaptured = { imageFile ->
-                showCamera = false
+    if (showMultiPageScan) {
+        MultiPageScanScreen(
+            onComplete = { imageFiles ->
+                showMultiPageScan = false
                 scope.launch {
                     isProcessing = true
-                    processingMessage = "Processing image..."
+                    processingMessage = "Processing ${imageFiles.size} page${if (imageFiles.size != 1) "s" else ""}..."
                     
                     try {
-                        // Optimize image for PDF
-                        val optimizedFile = File(context.cacheDir, "optimized_${imageFile.name}")
-                        CameraUtils.optimizeImageForPdf(imageFile, optimizedFile)
+                        val optimizedFiles = mutableListOf<File>()
                         
-                        processingMessage = "Performing OCR..."
+                        // Optimize all images
+                        imageFiles.forEachIndexed { index, imageFile ->
+                            processingMessage = "Optimizing page ${index + 1} of ${imageFiles.size}..."
+                            val optimizedFile = File(context.cacheDir, "optimized_page_${index}.jpg")
+                            CameraUtils.optimizeImageForPdf(imageFile, optimizedFile)
+                            optimizedFiles.add(optimizedFile)
+                        }
                         
-                        // Perform OCR
-                        val ocrResult = CameraUtils.extractTextFromImage(context, optimizedFile)
+                        processingMessage = "Performing OCR on ${imageFiles.size} page${if (imageFiles.size != 1) "s" else ""}..."
                         
-                        processingMessage = "Creating PDF..."
+                        // Perform OCR on all pages
+                        val ocrResults = mutableListOf<OcrResult>()
+                        optimizedFiles.forEachIndexed { index, file ->
+                            processingMessage = "OCR page ${index + 1} of ${optimizedFiles.size}..."
+                            val ocrResult = CameraUtils.extractTextFromImage(context, file)
+                            ocrResult.onSuccess { ocr ->
+                                ocrResults.add(ocr)
+                            }
+                        }
                         
-                        // Convert to PDF
+                        processingMessage = "Creating ${imageFiles.size}-page PDF..."
+                        
+                        // Convert to multi-page PDF
                         val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
                         val pdfFile = File(context.cacheDir, "scan_$timestamp.pdf")
                         
-                        val result = ImageToPdfUtils.imageToPdf(context, optimizedFile, pdfFile)
+                        val result = ImageToPdfUtils.imagesToPdf(context, optimizedFiles, pdfFile)
                         result.onSuccess { pdf ->
                             // Save via SAF
                             val savedUri = StorageUtils.saveFile(
@@ -497,19 +510,19 @@ fun ScanScreen(viewModel: PdfViewModel) {
                             )
                             
                             savedUri?.let { uri ->
-                                viewModel.addDocument("scan_$timestamp.pdf", uri.toString(), 1)
+                                viewModel.addDocument("scan_$timestamp.pdf", uri.toString(), imageFiles.size)
                             }
                             
-                            // Detect document type
-                            ocrResult.onSuccess { ocr ->
-                                val docType = CameraUtils.detectDocumentType(ocr.fullText)
+                            // Detect document type from first page
+                            if (ocrResults.isNotEmpty()) {
+                                val docType = CameraUtils.detectDocumentType(ocrResults[0].fullText)
                                 // TODO: If receipt, offer to extract data
                             }
                         }
                         
                         // Cleanup temp files
-                        optimizedFile.delete()
-                        imageFile.delete()
+                        optimizedFiles.forEach { it.delete() }
+                        imageFiles.forEach { it.delete() }
                     } catch (e: Exception) {
                         e.printStackTrace()
                     } finally {
@@ -517,7 +530,7 @@ fun ScanScreen(viewModel: PdfViewModel) {
                     }
                 }
             },
-            onClose = { showCamera = false }
+            onCancel = { showMultiPageScan = false }
         )
     } else {
         Box(modifier = Modifier.fillMaxSize()) {
@@ -540,7 +553,7 @@ fun ScanScreen(viewModel: PdfViewModel) {
                 Button(
                     onClick = {
                         if (hasCameraPermission) {
-                            showCamera = true
+                            showMultiPageScan = true
                         } else {
                             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
                         }
