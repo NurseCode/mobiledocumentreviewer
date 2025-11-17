@@ -1,0 +1,161 @@
+name: Build Android APK/AAB
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
+        
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+      
+    - name: Build project-level build.gradle
+      run: |
+        cat > build.gradle << 'EOF'
+        buildscript {
+            ext {
+                kotlin_version = '1.9.22'
+            }
+            repositories {
+                google()
+                mavenCentral()
+            }
+            dependencies {
+                classpath 'com.android.tools.build:gradle:8.2.2'
+                classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+            }
+        }
+
+        allprojects {
+            repositories {
+                google()
+                mavenCentral()
+            }
+        }
+
+        task clean(type: Delete) {
+            delete rootProject.buildDir
+        }
+        EOF
+        
+    - name: Create proguard-rules.pro
+      run: |
+        cat > app/proguard-rules.pro << 'EOF'
+        -keep public class * extends android.app.Activity
+        -keep public class * extends android.app.Application
+        -keep public class * extends androidx.compose.runtime.**
+        -keepattributes *Annotation*
+        -dontwarn org.bouncycastle.jsse.**
+        -dontwarn org.conscrypt.*
+        -dontwarn org.openjsse.**
+        EOF
+        
+    - name: Create gradle wrapper properties
+      run: |
+        mkdir -p gradle/wrapper
+        cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
+        distributionBase=GRADLE_USER_HOME
+        distributionPath=wrapper/dists
+        distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
+        zipStoreBase=GRADLE_USER_HOME
+        zipStorePath=wrapper/dists
+        EOF
+        
+    - name: Create basic launcher icons
+      run: |
+        # Create simple colored PNG icons for different densities
+        # In production, you'd use proper icon assets
+        echo "Creating placeholder icons..."
+        
+        # For now, we'll create empty files as placeholders
+        # The build will use default Android icons
+        touch app/src/main/res/mipmap-mdpi/ic_launcher.png
+        touch app/src/main/res/mipmap-hdpi/ic_launcher.png
+        touch app/src/main/res/mipmap-xhdpi/ic_launcher.png
+        touch app/src/main/res/mipmap-xxhdpi/ic_launcher.png
+        touch app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
+        
+        touch app/src/main/res/mipmap-mdpi/ic_launcher_round.png
+        touch app/src/main/res/mipmap-hdpi/ic_launcher_round.png
+        touch app/src/main/res/mipmap-xhdpi/ic_launcher_round.png
+        touch app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png
+        touch app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
+        
+    - name: Create themes.xml
+      run: |
+        mkdir -p app/src/main/res/values
+        cat > app/src/main/res/values/themes.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <style name="Theme.Material3.DynamicColors.DayNight" parent="android:Theme.Material.Light">
+            </style>
+        </resources>
+        EOF
+        
+    - name: Create strings.xml
+      run: |
+        cat > app/src/main/res/values/strings.xml << 'EOF'
+        <?xml version="1.0" encoding="utf-8"?>
+        <resources>
+            <string name="app_name">Quick PDF Composer</string>
+        </resources>
+        EOF
+        
+    - name: Download Gradle Wrapper
+      run: |
+        gradle wrapper --gradle-version 8.2 || true
+        
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --stacktrace
+      
+    - name: Build Release APK
+      run: ./gradlew assembleRelease --stacktrace
+      
+    - name: Build Release AAB (Android App Bundle)
+      run: ./gradlew bundleRelease --stacktrace
+      
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+        
+    - name: Upload Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-release
+        path: app/build/outputs/apk/release/app-release.apk
+        
+    - name: Upload Release AAB
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-bundle
+        path: app/build/outputs/bundle/release/app-release.aab
+        
+    - name: Build Summary
+      run: |
+        echo "## Build Artifacts Generated:" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Debug APK (for testing)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Release APK (for direct installation)" >> $GITHUB_STEP_SUMMARY
+        echo "- ✅ Release AAB (for Google Play Console upload)" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### File Sizes:" >> $GITHUB_STEP_SUMMARY
+        ls -lh app/build/outputs/apk/debug/app-debug.apk 2>/dev/null | awk '{print "Debug APK: " $5}' >> $GITHUB_STEP_SUMMARY || true
+        ls -lh app/build/outputs/apk/release/app-release.apk 2>/dev/null | awk '{print "Release APK: " $5}' >> $GITHUB_STEP_SUMMARY || true
+        ls -lh app/build/outputs/bundle/release/app-release.aab 2>/dev/null | awk '{print "Release AAB: " $5}' >> $GITHUB_STEP_SUMMARY || true

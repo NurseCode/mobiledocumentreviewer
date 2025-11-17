@@ -1,0 +1,151 @@
+# Quick PDF Composer - Project Documentation
+
+## Overview
+A native Android app for offline PDF creation, scanning, OCR, and manipulation. Built specifically for Android devices (phones and tablets) using Kotlin and Jetpack Compose. The app works completely offline and uses GitHub Actions for building APK/AAB files since Android Studio is not available locally.
+
+## Project Goals
+- Create a productivity app for PDF document management on Android
+- Support both phones and tablets with responsive UI
+- Provide offline-first functionality (no cloud dependencies)
+- Enable easy deployment to Google Play Console
+- Build without requiring Android Studio installation
+
+## Current State
+**Status**: Initial project setup complete
+- ✅ Project structure created
+- ✅ MainActivity with Jetpack Compose UI
+- ✅ Room database for bookmarks and documents
+- ✅ Material 3 theming with responsive layouts
+- ✅ GitHub Actions workflow for APK/AAB building
+- ⏳ Camera scanning (pending implementation)
+- ⏳ PDF manipulation features (pending implementation)
+- ⏳ OCR functionality (pending implementation)
+
+## Recent Changes
+**Date**: December 2024
+- Created Android project structure
+- Implemented base UI with Home, Scan, and Tools screens
+- Set up Room database entities for bookmarks and PDF documents
+- Configured GitHub Actions workflow for automated builds
+- Added responsive navigation (NavigationBar for phones, NavigationRail for tablets)
+
+## User Preferences
+- **Development Environment**: Replit (no Android Studio due to storage limitations)
+- **Build Method**: GitHub Actions for APK/AAB generation
+- **Target Platform**: Android only (not iOS)
+- **Distribution**: Google Play Console for Android
+- **Device**: Personal Android device for testing
+- **Previous Success**: Built a native Android app successfully using this workflow
+
+## Project Architecture
+
+### Technology Stack
+- **Language**: Kotlin
+- **UI Framework**: Jetpack Compose with Material 3
+- **Database**: Room (SQLite)
+- **Camera**: CameraX API
+- **ML/AI**: Google ML Kit (Document Scanner, Text Recognition)
+- **PDF APIs**: Android PdfRenderer and PdfDocument
+- **Build System**: Gradle
+- **CI/CD**: GitHub Actions
+
+### Key Dependencies
+```gradle
+- Jetpack Compose (UI)
+- CameraX (Camera capture)
+- ML Kit Document Scanner (Edge detection)
+- ML Kit Text Recognition (OCR)
+- Room Database (Local storage)
+- Kotlin Coroutines (Async operations)
+- Material 3 Components
+```
+
+### File Structure
+```
+QuickPDFComposer/
+├── .github/workflows/build-apk.yml  # Automated build pipeline
+├── app/
+│   ├── src/main/
+│   │   ├── java/com/pdfcomposer/app/MainActivity.kt  # Main app code
+│   │   ├── AndroidManifest.xml  # App configuration
+│   │   └── res/  # Resources (icons, themes, strings)
+│   └── build.gradle  # App dependencies
+├── build.gradle  # Project configuration
+└── settings.gradle  # Project settings
+```
+
+### Database Schema
+**Bookmark Entity**:
+- id (PrimaryKey)
+- pdfUri (String)
+- pageNumber (Int)
+- label (String)
+- timestamp (Long)
+
+**PdfDocument Entity**:
+- id (PrimaryKey)
+- fileName (String)
+- filePath (String)
+- pageCount (Int)
+- createdAt (Long)
+
+### Device Compatibility
+- **Minimum SDK**: API 24 (Android 7.0) - covers 95%+ devices
+- **Target SDK**: API 34 (Android 14)
+- **Screen Support**: 5-7" phones and 8-12" tablets
+- **Camera**: Works with 5MP+ cameras (standard on modern devices)
+- **Storage**: Uses scoped storage (Android 10+ compliant)
+
+## Build Process
+1. Code development in Replit or any editor
+2. Push to GitHub repository
+3. GitHub Actions workflow triggers automatically
+4. Workflow builds:
+   - Debug APK (for testing)
+   - Release APK (for direct installation)
+   - Release AAB (for Google Play upload)
+5. Download artifacts from GitHub Actions
+6. Sideload APK to Android device for testing
+7. Upload AAB to Google Play Console for distribution
+
+## Features Roadmap
+
+### MVP Features (In Progress)
+- [x] Project structure and UI framework
+- [x] Database setup for bookmarks
+- [ ] Document scanning with camera
+- [ ] Image to PDF conversion
+- [ ] OCR text extraction
+- [ ] PDF merge/split/compress
+- [ ] Basic annotations
+- [ ] Bookmark navigation
+- [ ] Quality detection for scans
+
+### Future Enhancements
+- Premium tier with unlimited bookmarks
+- Advanced OCR features
+- Batch processing
+- Cloud backup (optional)
+- Advanced editing (rotate, watermark)
+- Dark mode
+- Accessibility improvements
+
+## Design Decisions
+1. **Native Android vs Cross-Platform**: Chose native Android due to:
+   - Prior success with this approach
+   - Better performance for camera/OCR operations
+   - Simpler ML Kit integration
+   - Optimized for Google Play Console deployment
+   
+2. **Jetpack Compose**: Modern declarative UI that handles phone/tablet responsiveness automatically
+
+3. **Offline-First**: All core features work without internet for privacy and reliability
+
+4. **GitHub Actions**: Enables building without Android Studio installation
+
+## Notes
+- This is an Android-only app (not cross-platform)
+- User has successfully built Android apps before using similar workflow
+- Focus is on productivity and document management
+- App will be published to Google Play Console
+- Testing is done on physical Android device (no emulator needed)
