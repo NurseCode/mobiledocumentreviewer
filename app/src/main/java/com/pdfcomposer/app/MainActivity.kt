@@ -50,7 +50,7 @@ data class Bookmark(
 )
 
 @Entity(tableName = "pdf_documents")
-data class PdfDocument(
+data class StoredPdfDocument(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
     val fileName: String,
     val filePath: String,
@@ -76,19 +76,19 @@ interface BookmarkDao {
 @Dao
 interface PdfDocumentDao {
     @Query("SELECT * FROM pdf_documents ORDER BY createdAt DESC")
-    fun getAllDocuments(): Flow<List<PdfDocument>>
+    fun getAllDocuments(): Flow<List<StoredPdfDocument>>
     
     @Insert
-    suspend fun insert(document: PdfDocument)
+    suspend fun insert(document: StoredPdfDocument)
     
     @Delete
-    suspend fun delete(document: PdfDocument)
+    suspend fun delete(document: StoredPdfDocument)
     
     @Query("SELECT COUNT(*) FROM pdf_documents")
     suspend fun getCount(): Int
 }
 
-@Database(entities = [Bookmark::class, PdfDocument::class], version = 1, exportSchema = false)
+@Database(entities = [Bookmark::class, StoredPdfDocument::class], version = 1, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun pdfDocumentDao(): PdfDocumentDao
@@ -116,7 +116,7 @@ class PdfViewModel(
     private val pdfDocumentDao: PdfDocumentDao
 ) : ViewModel() {
     
-    val allDocuments: Flow<List<PdfDocument>> = pdfDocumentDao.getAllDocuments()
+    val allDocuments: Flow<List<StoredPdfDocument>> = pdfDocumentDao.getAllDocuments()
     
     fun getBookmarksForPdf(uri: String): Flow<List<Bookmark>> {
         return bookmarkDao.getBookmarksForPdf(uri)
@@ -136,11 +136,11 @@ class PdfViewModel(
     
     fun addDocument(fileName: String, filePath: String, pageCount: Int) {
         viewModelScope.launch {
-            pdfDocumentDao.insert(PdfDocument(fileName = fileName, filePath = filePath, pageCount = pageCount))
+            pdfDocumentDao.insert(StoredPdfDocument(fileName = fileName, filePath = filePath, pageCount = pageCount))
         }
     }
     
-    fun deleteDocument(document: PdfDocument) {
+    fun deleteDocument(document: StoredPdfDocument) {
         viewModelScope.launch {
             pdfDocumentDao.delete(document)
             bookmarkDao.deleteAllForPdf(document.filePath)
@@ -336,7 +336,7 @@ fun HomeScreen(viewModel: PdfViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DocumentCard(document: PdfDocument, viewModel: PdfViewModel) {
+fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = { }
