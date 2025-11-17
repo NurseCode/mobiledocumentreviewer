@@ -5,16 +5,18 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 ## Features
 
 ### Core Functionality
-- **Document Scanning**: Use your camera with ML Kit edge detection and auto-enhancement
-- **Image to PDF**: Convert gallery photos to high-quality PDFs
-- **OCR Text Extraction**: Extract text from scanned documents offline using ML Kit
+- **Document Scanning**: Use your camera with ML Kit edge detection and auto-enhancement (coming soon)
+- **Image to PDF**: Convert gallery photos to high-quality PDFs (coming soon)
+- **OCR Text Extraction**: Extract text from scanned documents offline using ML Kit (coming soon)
 - **PDF Manipulation**: 
-  - Merge multiple PDFs
-  - Split PDFs into pages
-  - Compress file sizes
-- **Annotations**: Draw and add text notes to PDFs
-- **Bookmarks**: Navigate large documents easily (5 free bookmarks per PDF)
-- **Quality Detection**: Automatically checks if scans are good enough for OCR
+  - ✅ **Merge multiple PDFs** - Combine PDFs with bookmark preservation
+  - ✅ **Split PDFs** - Extract pages into separate files
+  - **Compress file sizes** (coming soon)
+- **Annotations**: Draw and add text notes to PDFs (coming soon)
+- **✅ Embedded Bookmarks**: Add bookmarks that work in Adobe Acrobat, computers, any PDF reader
+- **✅ Share to Cloud**: Use Android Share Sheet to send PDFs to Dropbox, Drive, Email, etc.
+- **✅ Flexible Storage**: Choose private app storage, public Documents folder, or share immediately
+- **Quality Detection**: Automatically checks if scans are good enough for OCR (coming soon)
 
 ### Device Support
 - **Phones**: Android 7.0+ (API 24+), optimized for 5-7" screens
@@ -26,10 +28,12 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - **Kotlin** - Modern Android development
 - **Jetpack Compose** - Declarative UI framework
 - **Material 3** - Dynamic color theming
-- **CameraX** - Camera capture API
-- **ML Kit** - Document scanning and OCR (offline)
-- **Room Database** - Local storage for bookmarks
-- **PdfRenderer & PdfDocument** - PDF viewing and manipulation
+- **Apache PDFBox Android** - PDF manipulation & embedded bookmarks
+- **CameraX** - Camera capture API (coming soon)
+- **ML Kit** - Document scanning and OCR offline (coming soon)
+- **Room Database** - Local storage for documents
+- **DataStore** - User preferences storage
+- **FileProvider** - Secure file sharing across apps
 
 ## Building the App
 
@@ -105,15 +109,20 @@ No Android Studio required!
 
 - [x] Basic UI with Material 3
 - [x] Document list and management
-- [x] Room database for bookmarks
+- [x] Room database for documents
+- [x] **PDFBox integration for bookmark embedding**
+- [x] **Android Share Intent for cloud storage**
+- [x] **Flexible storage locations (Private/Public/Share)**
+- [x] **PDF merge with bookmark preservation**
+- [x] **PDF split functionality**
+- [ ] Settings UI for storage preferences
 - [ ] Camera scanning with CameraX
 - [ ] ML Kit document edge detection
 - [ ] Image to PDF conversion
 - [ ] OCR text extraction
-- [ ] PDF merge/split/compress
+- [ ] PDF compression
 - [ ] Annotation tools
 - [ ] Quality detection
-- [ ] Premium features with in-app billing
 
 ## License
 

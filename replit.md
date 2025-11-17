@@ -11,23 +11,32 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - Build without requiring Android Studio installation
 
 ## Current State
-**Status**: Initial project setup complete
+**Status**: Core PDF features implemented
 - ✅ Project structure created
 - ✅ MainActivity with Jetpack Compose UI
-- ✅ Room database for bookmarks and documents
+- ✅ Room database for documents
 - ✅ Material 3 theming with responsive layouts
 - ✅ GitHub Actions workflow for APK/AAB building
+- ✅ **Apache PDFBox Android integrated**
+- ✅ **Embedded bookmark functionality (works in Adobe Acrobat!)**
+- ✅ **Android Share Intent for cloud storage**
+- ✅ **PDF merge and split operations**
+- ✅ **Flexible storage locations**
+- ⏳ Settings UI (pending)
 - ⏳ Camera scanning (pending implementation)
-- ⏳ PDF manipulation features (pending implementation)
 - ⏳ OCR functionality (pending implementation)
 
 ## Recent Changes
-**Date**: December 2024
-- Created Android project structure
-- Implemented base UI with Home, Scan, and Tools screens
-- Set up Room database entities for bookmarks and PDF documents
-- Configured GitHub Actions workflow for automated builds
-- Added responsive navigation (NavigationBar for phones, NavigationRail for tablets)
+**Date**: November 17, 2025
+- ✅ Integrated Apache PDFBox Android for bookmark embedding
+- ✅ Implemented portable bookmarks that work across all PDF readers
+- ✅ Added Android Share Intent for cloud storage (Dropbox, Drive, Email, etc.)
+- ✅ Created flexible storage system (Private/Public/Share)
+- ✅ Implemented PDF merge and split functionality
+- ✅ Added FileProvider for secure file sharing
+- ✅ Created PdfUtils utility class with all PDF operations
+- ✅ Added SettingsManager for user preferences with DataStore
+- ✅ Updated build configuration with PDFBox and ProGuard rules
 
 ## User Preferences
 - **Development Environment**: Replit (no Android Studio due to storage limitations)
