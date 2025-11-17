@@ -15,5 +15,12 @@
 -dontwarn java.awt.**
 
 # Ignore optional JPEG2000 dependencies (not needed for our use case)
--dontwarn com.gemalto.jp2.JP2Decoder
--dontwarn com.gemalto.jp2.JP2Encoder
+# These are optional dependencies for JPXFilter that we don't use
+-dontwarn com.gemalto.jp2.**
+-dontnote com.gemalto.jp2.**
+
+# Keep JPXFilter but allow missing JP2 dependencies
+-keep class com.tom_roush.pdfbox.filter.JPXFilter { *; }
+
+# Tell R8 to ignore warnings about missing classes
+-ignorewarnings
