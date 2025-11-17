@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Internal app storage -->
+    <files-path name="pdf_files" path="pdfs/" />
+    
+    <!-- External storage (Documents folder) -->
+    <external-path name="external_pdfs" path="Documents/QuickPDFComposer/" />
+    
+    <!-- Cache directory for temporary files -->
+    <cache-path name="cache_pdfs" path="pdfs/" />
+    
+    <!-- All internal files -->
+    <files-path name="all_files" path="." />
+</paths>

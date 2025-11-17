@@ -5,3 +5,11 @@
 -dontwarn org.bouncycastle.jsse.**
 -dontwarn org.conscrypt.*
 -dontwarn org.openjsse.**
+
+# PDFBox Android
+-keep class com.tom_roush.pdfbox.** { *; }
+-keep class org.apache.fontbox.** { *; }
+-dontwarn org.apache.pdfbox.**
+-dontwarn org.apache.fontbox.**
+-dontwarn javax.activation.**
+-dontwarn java.awt.**
