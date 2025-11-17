@@ -470,9 +470,12 @@ fun ScanScreen(viewModel: PdfViewModel) {
                     isProcessing = true
                     processingMessage = "Processing ${imageFiles.size} page${if (imageFiles.size != 1) "s" else ""}..."
                     
+                    // Declare temp file collections outside try for cleanup access
+                    val optimizedFiles = mutableListOf<File>()
+                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                    val pdfFile = File(context.cacheDir, "scan_$timestamp.pdf")
+                    
                     try {
-                        val optimizedFiles = mutableListOf<File>()
-                        
                         // Optimize all images
                         imageFiles.forEachIndexed { index, imageFile ->
                             processingMessage = "Optimizing page ${index + 1} of ${imageFiles.size}..."
@@ -495,10 +498,6 @@ fun ScanScreen(viewModel: PdfViewModel) {
                         
                         processingMessage = "Creating ${imageFiles.size}-page PDF..."
                         
-                        // Convert to multi-page PDF
-                        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                        val pdfFile = File(context.cacheDir, "scan_$timestamp.pdf")
-                        
                         val result = ImageToPdfUtils.imagesToPdf(context, optimizedFiles, pdfFile)
                         result.onSuccess { pdf ->
                             // Save via SAF
@@ -520,11 +519,25 @@ fun ScanScreen(viewModel: PdfViewModel) {
                             }
                         }
                         
-                        // Cleanup temp files
-                        optimizedFiles.forEach { it.delete() }
-                        imageFiles.forEach { it.delete() }
+                        // Cleanup ALL temp files (optimized, original captures, temp PDF)
+                        optimizedFiles.forEach { file ->
+                            if (!file.delete() && file.exists()) {
+                                android.util.Log.w("ScanScreen", "Failed to delete optimized file: ${file.absolutePath}")
+                            }
+                        }
+                        imageFiles.forEach { file ->
+                            if (!file.delete() && file.exists()) {
+                                android.util.Log.w("ScanScreen", "Failed to delete captured file: ${file.absolutePath}")
+                            }
+                        }
+                        // Delete temp PDF file from cache after SAF save
+                        pdfFile.delete()
                     } catch (e: Exception) {
                         e.printStackTrace()
+                        // Ensure cleanup even on exception
+                        optimizedFiles.forEach { it.delete() }
+                        imageFiles.forEach { it.delete() }
+                        pdfFile.delete()
                     } finally {
                         isProcessing = false
                     }

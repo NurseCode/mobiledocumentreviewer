@@ -35,6 +35,28 @@ fun MultiPageScanScreen(
     var showCamera by remember { mutableStateOf(true) }
     var currentPageNumber by remember { mutableStateOf(1) }
     
+    // Cleanup function to delete all temp files and reset state
+    fun cleanupAndReset() {
+        capturedPages.forEach { file ->
+            val deleted = try {
+                file.delete()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+            
+            // Log if deletion failed
+            if (!deleted && file.exists()) {
+                android.util.Log.e("MultiPageScan", "Failed to delete temp file: ${file.absolutePath}")
+            }
+        }
+        
+        // Reset state to prevent stale file references
+        capturedPages = emptyList()
+        currentPageNumber = 1
+        showCamera = true
+    }
+    
     if (showCamera) {
         CameraScreen(
             onImageCaptured = { imageFile ->
@@ -45,9 +67,12 @@ fun MultiPageScanScreen(
             },
             onClose = {
                 if (capturedPages.isEmpty()) {
+                    // No pages captured yet, just cancel
                     onCancel()
                 } else {
-                    showCamera = false
+                    // User canceling after capturing pages, cleanup and reset
+                    cleanupAndReset()
+                    onCancel()
                 }
             }
         )
@@ -59,8 +84,27 @@ fun MultiPageScanScreen(
                 showCamera = true
             },
             onDeletePage = { index ->
+                // Delete the file from disk before removing from list
+                if (index in capturedPages.indices) {
+                    val file = capturedPages[index]
+                    val deleted = try {
+                        file.delete()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        false
+                    }
+                    
+                    // Log if deletion failed
+                    if (!deleted && file.exists()) {
+                        android.util.Log.e("MultiPageScan", "Failed to delete temp file: ${file.absolutePath}")
+                    }
+                }
+                
                 capturedPages = capturedPages.filterIndexed { i, _ -> i != index }
+                
+                // If this was the last page, cleanup remaining files and cancel
                 if (capturedPages.isEmpty()) {
+                    cleanupAndReset()
                     onCancel()
                 }
             },
@@ -69,7 +113,11 @@ fun MultiPageScanScreen(
                     onComplete(capturedPages)
                 }
             },
-            onCancel = onCancel
+            onCancel = {
+                // Cleanup all temp files and reset state on cancel
+                cleanupAndReset()
+                onCancel()
+            }
         )
     }
 }
@@ -84,7 +132,17 @@ fun PageReviewScreen(
     onDone: () -> Unit,
     onCancel: () -> Unit
 ) {
-    var selectedPageIndex by remember { mutableStateOf(capturedPages.size - 1) }
+    var selectedPageIndex by remember(capturedPages) {
+        // Always select the last valid page, or 0 if pages exist
+        mutableStateOf(if (capturedPages.isNotEmpty()) capturedPages.size - 1 else 0)
+    }
+    
+    // Ensure selected index is always valid
+    LaunchedEffect(capturedPages.size, selectedPageIndex) {
+        if (selectedPageIndex >= capturedPages.size && capturedPages.isNotEmpty()) {
+            selectedPageIndex = capturedPages.size - 1
+        }
+    }
     
     Scaffold(
         topBar = {
