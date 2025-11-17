@@ -394,6 +394,22 @@ fun ScanScreen(viewModel: PdfViewModel) {
         }
     }
     
+    val pdfPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            // Take persistent permission to access the file
+            val takeFlags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                           android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            context.contentResolver.takePersistableUriPermission(it, takeFlags)
+            
+            // Get file info and add to database
+            val fileName = StorageUtils.getFileName(context, it) ?: "Unknown.pdf"
+            // TODO: Get page count from PDF
+            viewModel.addDocument(fileName, it.toString(), 1)
+        }
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -422,7 +438,18 @@ fun ScanScreen(viewModel: PdfViewModel) {
         ) {
             Icon(Icons.Default.CameraAlt, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Scan Document with Camera")
+            Text("Scan New Document")
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Button(
+            onClick = { pdfPickerLauncher.launch(arrayOf("application/pdf")) },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.FolderOpen, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Open Existing PDF")
         }
         
         Spacer(modifier = Modifier.height(16.dp))
@@ -439,7 +466,7 @@ fun ScanScreen(viewModel: PdfViewModel) {
         Spacer(modifier = Modifier.height(32.dp))
         
         Text(
-            text = "Camera scanning uses ML Kit for automatic edge detection and image enhancement",
+            text = "Scan documents with camera, or open existing PDFs from anywhere (Dropbox, Drive, local storage)",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -495,6 +522,14 @@ fun ToolsScreen(viewModel: PdfViewModel) {
             title = "Annotate & Draw",
             description = "Add notes, highlights, and drawings",
             icon = Icons.Default.Draw
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        ToolCard(
+            title = "Sign Document",
+            description = "Draw signature and embed in PDF",
+            icon = Icons.Default.Edit
         )
     }
 }

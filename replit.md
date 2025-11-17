@@ -67,6 +67,7 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - Room Database (Local storage)
 - Kotlin Coroutines (Async operations)
 - Material 3 Components
+- Apache PDFBox Android (PDF manipulation)
 ```
 
 ### File Structure
@@ -96,6 +97,23 @@ QuickPDFComposer/
 - fileName (String)
 - filePath (String)
 - pageCount (Int)
+- createdAt (Long)
+
+**SavedSignature Entity** (Future):
+- id (PrimaryKey)
+- name (String) - e.g., "Personal", "Business", "Initials"
+- imagePath (String) - Path to signature PNG
+- createdAt (Long)
+
+**Receipt Entity** (Future):
+- id (PrimaryKey)
+- pdfUri (String) - Link to PDF file
+- merchantName (String)
+- date (LocalDate)
+- total (Double)
+- tax (Double)
+- category (String)
+- jsonData (String) - Full structured data
 - createdAt (Long)
 
 ### Device Compatibility
@@ -151,6 +169,32 @@ QuickPDFComposer/
 3. **Offline-First**: All core features work without internet for privacy and reliability
 
 4. **GitHub Actions**: Enables building without Android Studio installation
+
+5. **Storage Access Framework (SAF)**: For persistent file storage that survives app uninstall
+   - Files stored in user-chosen locations (Documents, Downloads, external storage)
+   - Can open PDFs from any source (Dropbox, Google Drive, local storage)
+   - Full documentation in SAF_GUIDE.md
+
+6. **Embedded Bookmarks**: Using Apache PDFBox to embed bookmarks directly in PDF files
+   - Bookmarks work in any PDF reader (Adobe Acrobat, browsers, etc.)
+   - Portable across devices without app database dependency
+
+7. **Android Share Intent for Cloud**: Instead of individual cloud service integrations
+   - Universal sharing to Dropbox, Drive, Email, Slack, etc.
+   - No API keys or OAuth flows needed
+   - User controls via native Android sharing
+
+8. **Dual-Purpose OCR Architecture**:
+   - **General Document OCR**: Extract text from any document (contracts, forms, letters)
+   - **Receipt-Specific Parsing**: Auto-detect receipts and extract structured JSON data
+   - ML Kit Text Recognition for universal text extraction
+   - Pattern matching for receipt fields (merchant, total, items, tax, date)
+
+9. **Digital Signatures**: Draw and embed signatures directly in PDF files
+   - Signature canvas for drawing with finger/stylus
+   - Save signatures for reuse (personal, business, initials)
+   - Embed as images in PDF at user-specified positions
+   - Basic visual signatures (not cryptographic certificates)
 
 ## Notes
 - This is an Android-only app (not cross-platform)
