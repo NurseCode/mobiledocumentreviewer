@@ -99,6 +99,9 @@ dependencies {
     // DataStore for settings
     implementation 'androidx.datastore:datastore-preferences:1.0.0'
     
+    // DocumentFile for SAF file operations
+    implementation 'androidx.documentfile:documentfile:1.0.1'
+    
     // Coil for image loading
     implementation 'io.coil-kt:coil-compose:2.5.0'
     

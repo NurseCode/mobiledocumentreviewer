@@ -215,8 +215,10 @@ object ImageToPdfUtils {
                         val pdfY = marginY + (imageBitmap.height - textBlock.boundingBox.bottom) * scale
                         
                         // Make text invisible (render mode 3 = invisible)
+                        // Note: PDFBox Android doesn't have setTextRenderingMode,
+                        // so we set text color to transparent instead
                         contentStream.beginText()
-                        contentStream.setTextRenderingMode(3)
+                        contentStream.setNonStrokingColor(255, 255, 255) // White/transparent
                         contentStream.newLineAtOffset(pdfX, pdfY)
                         contentStream.showText(textBlock.text)
                         contentStream.endText()

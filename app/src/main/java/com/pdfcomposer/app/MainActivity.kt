@@ -13,6 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -423,17 +424,8 @@ fun ScanScreen(viewModel: PdfViewModel) {
                     
                     val result = ImageToPdfUtils.imageToPdf(context, tempImageFile, pdfFile)
                     result.onSuccess { pdf ->
-                        // Save via SAF
-                        val savedUri = StorageUtils.saveFile(
-                            context,
-                            Uri.fromFile(pdf),
-                            "scanned_$timestamp.pdf",
-                            "application/pdf"
-                        )
-                        
-                        savedUri?.let { uri ->
-                            viewModel.addDocument("scanned_$timestamp.pdf", uri.toString(), 1)
-                        }
+                        // Add to database (file is in cache)
+                        viewModel.addDocument("scanned_$timestamp.pdf", pdf.absolutePath, 1)
                     }
                     
                     tempImageFile.delete()
@@ -500,17 +492,8 @@ fun ScanScreen(viewModel: PdfViewModel) {
                         
                         val result = ImageToPdfUtils.imagesToPdf(context, optimizedFiles, pdfFile)
                         result.onSuccess { pdf ->
-                            // Save via SAF
-                            val savedUri = StorageUtils.saveFile(
-                                context,
-                                Uri.fromFile(pdf),
-                                "scan_$timestamp.pdf",
-                                "application/pdf"
-                            )
-                            
-                            savedUri?.let { uri ->
-                                viewModel.addDocument("scan_$timestamp.pdf", uri.toString(), imageFiles.size)
-                            }
+                            // Add to database (file is in cache)
+                            viewModel.addDocument("scan_$timestamp.pdf", pdf.absolutePath, imageFiles.size)
                             
                             // Detect document type from first page
                             if (ocrResults.isNotEmpty()) {

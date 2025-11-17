@@ -18,11 +18,11 @@ class SettingsManager(private val context: Context) {
     }
     
     val storageLocationFlow: Flow<StorageLocation> = context.dataStore.data.map { preferences ->
-        val locationString = preferences[STORAGE_LOCATION_KEY] ?: StorageLocation.PUBLIC.name
+        val locationString = preferences[STORAGE_LOCATION_KEY] ?: StorageLocation.SAF.name
         try {
             StorageLocation.valueOf(locationString)
         } catch (e: IllegalArgumentException) {
-            StorageLocation.PUBLIC
+            StorageLocation.SAF
         }
     }
     

@@ -130,11 +130,11 @@ object CameraUtils {
             }
             
             val extractedText = result.text
-            val confidence = calculateConfidence(result)
+            val confidence = 0.95f // ML Kit doesn't provide confidence scores
             val blocks = result.textBlocks.map { block ->
                 TextBlock(
                     text = block.text,
-                    confidence = block.confidence ?: 0f,
+                    confidence = 0.95f, // ML Kit doesn't provide per-block confidence
                     boundingBox = block.boundingBox
                 )
             }
@@ -145,16 +145,6 @@ object CameraUtils {
         }
     }
     
-    /**
-     * Calculate average confidence from OCR result
-     */
-    private fun calculateConfidence(text: com.google.mlkit.vision.text.Text): Float {
-        val blocks = text.textBlocks
-        if (blocks.isEmpty()) return 0f
-        
-        val totalConfidence = blocks.mapNotNull { it.confidence }.sum()
-        return totalConfidence / blocks.size
-    }
     
     /**
      * Detect document type from OCR text
