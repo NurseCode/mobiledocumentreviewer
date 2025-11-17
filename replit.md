@@ -11,7 +11,7 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - Build without requiring Android Studio installation
 
 ## Current State
-**Status**: Core PDF features implemented
+**Status**: Core scanning and OCR features implemented
 - ✅ Project structure created
 - ✅ MainActivity with Jetpack Compose UI
 - ✅ Room database for documents
@@ -22,9 +22,12 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ✅ **Android Share Intent for cloud storage**
 - ✅ **PDF merge and split operations**
 - ✅ **Flexible storage locations**
+- ✅ **Multi-page camera scanning with unlimited pages**
+- ✅ **Dual-purpose OCR (general documents + receipt detection)**
+- ✅ **Searchable PDF creation with invisible text layers**
 - ⏳ Settings UI (pending)
-- ⏳ Camera scanning (pending implementation)
-- ⏳ OCR functionality (pending implementation)
+- ⏳ Receipt JSON extraction (pending)
+- ⏳ Digital signatures (pending)
 
 ## Recent Changes
 **Date**: November 17, 2025
@@ -37,6 +40,18 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ✅ Created PdfUtils utility class with all PDF operations
 - ✅ Added SettingsManager for user preferences with DataStore
 - ✅ Updated build configuration with PDFBox and ProGuard rules
+- ✅ **Implemented multi-page scanning with CameraX**
+  - Unlimited pages per document
+  - Page preview gallery with thumbnails
+  - Delete and reorder pages before saving
+  - Robust file cleanup on all exit paths
+- ✅ **Built dual-purpose OCR system with ML Kit**
+  - General text extraction from any document
+  - Automatic receipt detection for future JSON parsing
+  - Searchable PDFs with invisible text layers
+- ✅ **Integrated SAF file picker for opening existing PDFs**
+  - Access PDFs from Dropbox, Google Drive, local storage
+  - Persistent permissions for repeated access
 
 ## User Preferences
 - **Development Environment**: Replit (no Android Studio due to storage limitations)
@@ -76,7 +91,17 @@ QuickPDFComposer/
 ├── .github/workflows/build-apk.yml  # Automated build pipeline
 ├── app/
 │   ├── src/main/
-│   │   ├── java/com/pdfcomposer/app/MainActivity.kt  # Main app code
+│   │   ├── java/com/pdfcomposer/app/
+│   │   │   ├── MainActivity.kt           # Main app with scan workflow
+│   │   │   ├── MultiPageScanScreen.kt    # Multi-page scan coordinator
+│   │   │   ├── CameraScreen.kt           # Camera capture UI
+│   │   │   ├── PageReviewScreen.kt       # Page preview gallery
+│   │   │   ├── CameraUtils.kt            # Camera, OCR, optimization
+│   │   │   ├── ImageToPdfUtils.kt        # PDF creation with text layers
+│   │   │   ├── PdfUtils.kt               # PDF operations (merge/split)
+│   │   │   ├── StorageUtils.kt           # SAF file handling
+│   │   │   ├── SettingsManager.kt        # User preferences
+│   │   │   └── [Database entities/DAOs]
 │   │   ├── AndroidManifest.xml  # App configuration
 │   │   └── res/  # Resources (icons, themes, strings)
 │   └── build.gradle  # App dependencies
@@ -140,12 +165,15 @@ QuickPDFComposer/
 ### MVP Features (In Progress)
 - [x] Project structure and UI framework
 - [x] Database setup for bookmarks
-- [ ] Document scanning with camera
-- [ ] Image to PDF conversion
-- [ ] OCR text extraction
-- [ ] PDF merge/split/compress
+- [x] Multi-page document scanning with camera
+- [x] Image to PDF conversion with searchable text
+- [x] OCR text extraction (general + receipt detection)
+- [x] PDF merge/split operations
+- [x] SAF integration for file access
+- [ ] Receipt JSON data extraction
+- [ ] Digital signatures
 - [ ] Basic annotations
-- [ ] Bookmark navigation
+- [ ] Bookmark navigation UI
 - [ ] Quality detection for scans
 
 ### Future Enhancements
