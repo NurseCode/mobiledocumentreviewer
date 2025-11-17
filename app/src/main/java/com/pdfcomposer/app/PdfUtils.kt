@@ -16,8 +16,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 
 enum class StorageLocation {
-    PRIVATE,    // App-private storage (/data/data/...)
-    PUBLIC,     // Public Documents folder
+    PRIVATE,    // App-private storage (/data/data/...) - deleted on uninstall
+    SAF,        // User-chosen folder via SAF - persists after uninstall
     SHARE       // Share immediately after saving
 }
 
@@ -105,14 +105,16 @@ object PdfUtils {
     fun getPdfStorageDir(context: Context, location: StorageLocation): File {
         return when (location) {
             StorageLocation.PRIVATE -> {
+                // App-private storage - deleted when app is uninstalled
                 File(context.filesDir, "pdfs").apply { mkdirs() }
             }
-            StorageLocation.PUBLIC -> {
-                // Use scoped storage compliant path (app-specific external directory)
-                // This is accessible via file manager but scoped to the app
-                File(context.getExternalFilesDir(null), "QuickPDFComposer").apply { mkdirs() }
+            StorageLocation.SAF -> {
+                // For SAF, we use temp storage then copy to user-chosen location
+                // The actual persistent location is managed via StorageUtils
+                File(context.cacheDir, "saf_temp").apply { mkdirs() }
             }
             StorageLocation.SHARE -> {
+                // Temporary storage for immediate sharing
                 File(context.cacheDir, "pdfs").apply { mkdirs() }
             }
         }
