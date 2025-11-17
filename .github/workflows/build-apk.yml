@@ -25,34 +25,21 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
-    - name: Build project-level build.gradle
+    - name: Verify build.gradle exists
       run: |
-        cat > build.gradle << 'EOF'
-        buildscript {
-            ext {
-                kotlin_version = '1.9.22'
-            }
-            repositories {
-                google()
-                mavenCentral()
-            }
-            dependencies {
-                classpath 'com.android.tools.build:gradle:8.2.2'
-                classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
-            }
-        }
-
-        allprojects {
-            repositories {
-                google()
-                mavenCentral()
-            }
+        if [ ! -f build.gradle ]; then
+          echo "Creating build.gradle with modern syntax"
+          cat > build.gradle << 'EOF'
+        plugins {
+            id 'com.android.application' version '8.2.2' apply false
+            id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
         }
 
         task clean(type: Delete) {
             delete rootProject.buildDir
         }
         EOF
+        fi
         
     - name: Create proguard-rules.pro
       run: |
