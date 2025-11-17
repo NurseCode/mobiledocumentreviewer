@@ -233,7 +233,7 @@ fun MainScreen(viewModel: PdfViewModel) {
                         selected = selectedScreen == Screen.Tools,
                         onClick = { selectedScreen = Screen.Tools }
                     )
-                </NavigationBar>
+                }
             }
         }
     ) { padding ->
