@@ -403,7 +403,12 @@ fun MainScreen(viewModel: PdfViewModel) {
                             pdfUri = viewingDocument!!.filePath
                         )
                     } else {
-                        ScreenContent(selectedScreen, viewModel, onViewDocument = { viewingDocument = it })
+                        ScreenContent(
+                            selectedScreen, 
+                            viewModel, 
+                            onViewDocument = { viewingDocument = it },
+                            onGalleryImageSelected = { galleryImageToCrop = it }
+                        )
                     }
                 }
             }
@@ -418,7 +423,12 @@ fun MainScreen(viewModel: PdfViewModel) {
                         pdfUri = viewingDocument!!.filePath
                     )
                 } else {
-                    ScreenContent(selectedScreen, viewModel, onViewDocument = { viewingDocument = it })
+                    ScreenContent(
+                        selectedScreen, 
+                        viewModel, 
+                        onViewDocument = { viewingDocument = it },
+                        onGalleryImageSelected = { galleryImageToCrop = it }
+                    )
                 }
             }
         }
@@ -426,10 +436,15 @@ fun MainScreen(viewModel: PdfViewModel) {
 }
 
 @Composable
-fun ScreenContent(screen: Screen, viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> Unit = {}) {
+fun ScreenContent(
+    screen: Screen, 
+    viewModel: PdfViewModel, 
+    onViewDocument: (StoredPdfDocument) -> Unit = {},
+    onGalleryImageSelected: (File) -> Unit = {}
+) {
     when (screen) {
         Screen.Home -> HomeScreen(viewModel, onViewDocument)
-        Screen.Scan -> ScanScreen(viewModel)
+        Screen.Scan -> ScanScreen(viewModel, onGalleryImageSelected)
         Screen.Tools -> ToolsScreen(viewModel)
         Screen.Settings -> SettingsScreen()
     }
@@ -726,7 +741,10 @@ data class PendingSaveData(
 )
 
 @Composable
-fun ScanScreen(viewModel: PdfViewModel) {
+fun ScanScreen(
+    viewModel: PdfViewModel,
+    onGalleryImageSelected: (File) -> Unit = {}
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settingsManager = remember { SettingsManager(context) }
@@ -776,7 +794,7 @@ fun ScanScreen(viewModel: PdfViewModel) {
                     }
                     
                     // Show crop screen instead of directly converting to PDF
-                    galleryImageToCrop = tempImageFile
+                    onGalleryImageSelected(tempImageFile)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
