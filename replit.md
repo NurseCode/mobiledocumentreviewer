@@ -11,55 +11,55 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - Build without requiring Android Studio installation
 
 ## Current State
-**Status**: Core features complete; implementing document management system
+**Status**: Document management system complete; ready for build and testing
 - ✅ Project structure created
 - ✅ MainActivity with Jetpack Compose UI
-- ✅ Room database for documents
+- ✅ Room database for documents (v2 with categories)
 - ✅ Material 3 theming with responsive layouts
 - ✅ GitHub Actions workflow for APK/AAB building
 - ✅ **Apache PDFBox Android integrated**
 - ✅ **Embedded bookmark functionality (works in Adobe Acrobat!)**
 - ✅ **Android Share Intent for cloud storage**
 - ✅ **PDF merge and split operations**
-- ✅ **Flexible storage locations**
 - ✅ **Multi-page camera scanning with unlimited pages**
 - ✅ **Dual-purpose OCR (general documents + receipt detection)**
 - ✅ **Searchable PDF creation with invisible text layers**
 - ✅ **PDF viewer with bookmark navigation**
-- ✅ **EXIF orientation fix added**
+- ✅ **CameraX rotation fix (no more sideways images!)**
 - ✅ **Content URI support for SAF documents**
-- 🚧 **SAF persistent storage architecture (in progress)**
-- 🚧 **Document naming on creation (in progress)**
-- 🚧 **Folder/category organization (in progress)**
-- ⏳ Rename functionality (pending)
-- ⏳ Search and sorting (pending)
+- ✅ **SAF persistent storage (survives app uninstall)**
+- ✅ **Document naming on creation with smart OCR suggestions**
+- ✅ **Folder/category organization**
+- ✅ **Rename functionality via overflow menu**
+- ✅ **Three-dot overflow menu (rename/share/delete)**
+- ⏳ Category filtering and search UI (pending)
 - ⏳ Settings UI (pending)
 - ⏳ Receipt JSON extraction (pending)
 - ⏳ Digital signatures (pending)
 
 ## Recent Changes
-**Date**: November 17, 2025
-- ✅ Integrated Apache PDFBox Android for bookmark embedding
-- ✅ Implemented portable bookmarks that work across all PDF readers
-- ✅ Added Android Share Intent for cloud storage (Dropbox, Drive, Email, etc.)
-- ✅ Created flexible storage system (Private/Public/Share)
-- ✅ Implemented PDF merge and split functionality
-- ✅ Added FileProvider for secure file sharing
-- ✅ Created PdfUtils utility class with all PDF operations
-- ✅ Added SettingsManager for user preferences with DataStore
-- ✅ Updated build configuration with PDFBox and ProGuard rules
-- ✅ **Implemented multi-page scanning with CameraX**
-  - Unlimited pages per document
-  - Page preview gallery with thumbnails
-  - Delete and reorder pages before saving
-  - Robust file cleanup on all exit paths
-- ✅ **Built dual-purpose OCR system with ML Kit**
-  - General text extraction from any document
-  - Automatic receipt detection for future JSON parsing
-  - Searchable PDFs with invisible text layers
-- ✅ **Integrated SAF file picker for opening existing PDFs**
-  - Access PDFs from Dropbox, Google Drive, local storage
-  - Persistent permissions for repeated access
+**Date**: November 18, 2025
+- ✅ **Implemented SAF persistent storage architecture**
+  - One-time onboarding flow for directory selection
+  - Documents survive app uninstall and cache clearing
+  - Unified storage through SettingsManager DataStore
+  - Fixed DataStore deadlock using first() instead of collect()
+- ✅ **Fixed camera rotation using CameraX**
+  - No more sideways images on all devices
+  - Uses PreviewView display rotation (works on Android 14+)
+  - Waits for PreviewView initialization before camera setup
+- ✅ **Added document naming dialog**
+  - Smart auto-suggestions from OCR text
+  - Category/folder organization support
+  - Shown after scan completion, before save
+- ✅ **Built three-dot overflow menu**
+  - Rename documents with category editing
+  - Share via Android share intent
+  - Delete with bookmark cleanup
+- ✅ **Updated Room database to v2**
+  - Added category field to PdfDocument
+  - Proper migration handling
+  - Rename and category management functions
 
 ## User Preferences
 - **Development Environment**: Replit (no Android Studio due to storage limitations)
@@ -125,11 +125,12 @@ QuickPDFComposer/
 - label (String)
 - timestamp (Long)
 
-**PdfDocument Entity**:
+**PdfDocument Entity** (v2):
 - id (PrimaryKey)
 - fileName (String)
 - filePath (String)
 - pageCount (Int)
+- category (String, nullable) - For folder/category organization
 - createdAt (Long)
 
 **SavedSignature Entity** (Future):
