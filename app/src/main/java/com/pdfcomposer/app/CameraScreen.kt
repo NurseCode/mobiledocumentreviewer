@@ -1,8 +1,8 @@
 package com.pdfcomposer.app
 
-import android.app.Activity
 import android.graphics.BitmapFactory
-import android.view.WindowManager
+import android.view.OrientationEventListener
+import android.view.Surface
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -46,6 +46,29 @@ fun CameraScreen(
     var finalImageFile by remember { mutableStateOf<File?>(null) }
     var showPreview by remember { mutableStateOf(false) }
     
+    // Set up orientation listener with proper cleanup
+    DisposableEffect(Unit) {
+        val orientationEventListener = object : OrientationEventListener(context) {
+            override fun onOrientationChanged(orientation: Int) {
+                if (orientation == ORIENTATION_UNKNOWN) return
+                
+                val rotation = when (orientation) {
+                    in 45..134 -> Surface.ROTATION_270
+                    in 135..224 -> Surface.ROTATION_180
+                    in 225..314 -> Surface.ROTATION_90
+                    else -> Surface.ROTATION_0
+                }
+                
+                imageCapture?.targetRotation = rotation
+            }
+        }
+        orientationEventListener.enable()
+        
+        onDispose {
+            orientationEventListener.disable()
+        }
+    }
+    
     LaunchedEffect(previewView) {
         if (previewView == null) return@LaunchedEffect
         
@@ -54,14 +77,12 @@ fun CameraScreen(
         
         val preview = Preview.Builder().build()
         
-        // Get rotation from WindowManager for accurate device orientation
-        val windowManager = (context as? Activity)?.windowManager
-            ?: context.getSystemService(android.content.Context.WINDOW_SERVICE) as WindowManager
-        val rotation = windowManager.defaultDisplay.rotation
+        // Get initial rotation from PreviewView's display
+        val initialRotation = previewView!!.display?.rotation ?: Surface.ROTATION_0
         
         val imageCaptureBuilder = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-            .setTargetRotation(rotation)
+            .setTargetRotation(initialRotation)
         imageCapture = imageCaptureBuilder.build()
         
         val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
