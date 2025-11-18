@@ -254,9 +254,7 @@ fun MainScreen(viewModel: PdfViewModel) {
     
     // Check onboarding status on launch
     LaunchedEffect(hasCompletedOnboarding) {
-        if (!hasCompletedOnboarding) {
-            showOnboarding = true
-        }
+        showOnboarding = !hasCompletedOnboarding
     }
     
     val folderPickerLauncher = rememberLauncherForActivityResult(
@@ -338,25 +336,25 @@ fun MainScreen(viewModel: PdfViewModel) {
                 ) {
                     NavigationRailItem(
                         icon = { Icon(Icons.Default.Home, "Home") },
-                        label = { Text("Home") },
+                        label = { Text("Home", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Home,
                         onClick = { selectedScreen = Screen.Home }
                     )
                     NavigationRailItem(
                         icon = { Icon(Icons.Default.CameraAlt, "Scan") },
-                        label = { Text("Scan") },
+                        label = { Text("Scan", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Scan,
                         onClick = { selectedScreen = Screen.Scan }
                     )
                     NavigationRailItem(
                         icon = { Icon(Icons.Default.Edit, "Tools") },
-                        label = { Text("Tools") },
+                        label = { Text("Tools", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Tools,
                         onClick = { selectedScreen = Screen.Tools }
                     )
                     NavigationRailItem(
                         icon = { Icon(Icons.Default.Settings, "Settings") },
-                        label = { Text("Settings") },
+                        label = { Text("Settings", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Settings,
                         onClick = { selectedScreen = Screen.Settings }
                     )
@@ -592,6 +590,7 @@ fun HomeScreen(viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> U
 @Composable
 fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: () -> Unit = {}) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     var showMenu by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     
@@ -655,39 +654,42 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         leadingIcon = { Icon(Icons.Default.Share, null) },
                         onClick = {
                             showMenu = false
-                            try {
-                                val uri = if (document.filePath.startsWith("content://")) {
-                                    Uri.parse(document.filePath)
-                                } else {
-                                    val file = File(document.filePath)
-                                    if (!file.exists()) {
-                                        android.widget.Toast.makeText(
+                            scope.launch {
+                                try {
+                                    // For SAF URIs, share directly; for file paths, copy to cache first
+                                    val shareUri = if (document.filePath.startsWith("content://")) {
+                                        Uri.parse(document.filePath)
+                                    } else {
+                                        val file = File(document.filePath)
+                                        if (!file.exists()) {
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                "File not found: ${document.fileName}",
+                                                android.widget.Toast.LENGTH_LONG
+                                            ).show()
+                                            return@launch
+                                        }
+                                        androidx.core.content.FileProvider.getUriForFile(
                                             context,
-                                            "File not found: ${document.fileName}",
-                                            android.widget.Toast.LENGTH_LONG
-                                        ).show()
-                                        return@DropdownMenuItem
+                                            "${context.packageName}.fileprovider",
+                                            file
+                                        )
                                     }
-                                    androidx.core.content.FileProvider.getUriForFile(
+                                    
+                                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/pdf"
+                                        putExtra(Intent.EXTRA_STREAM, shareUri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share PDF"))
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    android.widget.Toast.makeText(
                                         context,
-                                        "${context.packageName}.fileprovider",
-                                        file
-                                    )
+                                        "Failed to share PDF: ${e.message}",
+                                        android.widget.Toast.LENGTH_LONG
+                                    ).show()
                                 }
-                                
-                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/pdf"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(shareIntent, "Share PDF"))
-                            } catch (e: Exception) {
-                                e.printStackTrace()
-                                android.widget.Toast.makeText(
-                                    context,
-                                    "Failed to share PDF: ${e.message}",
-                                    android.widget.Toast.LENGTH_LONG
-                                ).show()
                             }
                         }
                     )
@@ -839,7 +841,7 @@ fun ScanScreen(viewModel: PdfViewModel) {
                                 "Import_$timestamp"
                             }
                             
-                            // Store data and show naming dialog
+                            // FIRST set dialog states BEFORE cleanup
                             pendingSaveData = PendingSaveData(
                                 pdfFile = pdf,
                                 pageCount = 1,
@@ -847,17 +849,20 @@ fun ScanScreen(viewModel: PdfViewModel) {
                                 ocrResults = ocrResults
                             )
                             showNamingDialog = true
+                            
+                            // THEN clean up temp image files (CropScreen will unmount but dialog is already set)
+                            croppedFile.delete()
+                            galleryImageToCrop?.delete()
+                            galleryImageToCrop = null
+                        }.onFailure {
+                            // Clean up on failure too
+                            croppedFile.delete()
+                            galleryImageToCrop?.delete()
+                            galleryImageToCrop = null
                         }
-                        
-                        // Clean up temp files
-                        croppedFile.delete()
-                        galleryImageToCrop?.delete()
-                        galleryImageToCrop = null
                     } catch (e: Exception) {
                         e.printStackTrace()
-                        croppedFile.delete()
-                        galleryImageToCrop?.delete()
-                        galleryImageToCrop = null
+                        // Cleanup already handled in onFailure
                     } finally {
                         isProcessing = false
                     }
