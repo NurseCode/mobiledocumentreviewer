@@ -245,8 +245,12 @@ fun PdfViewerScreen(
                     if (viewModel != null && pdfUri != null) {
                         // Show bookmarks
                         IconButton(onClick = { showBookmarks = true }) {
-                            Badge(
-                                content = { if (bookmarks.isNotEmpty()) Text("${bookmarks.size}") }
+                            BadgedBox(
+                                badge = {
+                                    if (bookmarks.isNotEmpty()) {
+                                        Badge { Text("${bookmarks.size}") }
+                                    }
+                                }
                             ) {
                                 Icon(Icons.Default.Bookmark, "View Bookmarks")
                             }
