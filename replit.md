@@ -24,7 +24,7 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ✅ **Multi-page camera scanning with unlimited pages**
 - ✅ **Dual-purpose OCR (general documents + receipt detection)**
 - ✅ **Searchable PDF creation with invisible text layers**
-- ✅ **PDF viewer with bookmark navigation**
+- ✅ **PDF viewer with bookmark navigation and pinch-to-zoom**
 - ✅ **CameraX rotation fix (no more sideways images!)**
 - ✅ **Content URI support for SAF documents**
 - ✅ **SAF persistent storage (survives app uninstall)**
@@ -41,6 +41,12 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 
 ## Recent Changes
 **Date**: November 18, 2025
+- ✅ **Added pinch-to-zoom to PDF viewer**
+  - Two-finger pinch to zoom (1x to 5x magnification)
+  - Pan around zoomed pages with two fingers
+  - Zoom state preserved per page when scrolling
+  - Single-finger scrolling still works normally (no gesture conflicts)
+  - Essential for reading small text on phones/tablets
 - ✅ **Completely rebuilt advanced crop tool**
   - Fixed corner dragging for true diagonal movement (both X and Y together)
   - Added edge handles (blue circles) in middle of each side for precise edge movement
