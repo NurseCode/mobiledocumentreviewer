@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -381,9 +382,31 @@ fun ScreenContent(screen: Screen, viewModel: PdfViewModel, onViewDocument: (Stor
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> Unit = {}) {
     val documents by viewModel.allDocuments.collectAsState(initial = emptyList())
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    
+    val allCategories = remember(documents) {
+        documents
+            .mapNotNull { if (it.category.isNotBlank()) it.category else null }
+            .distinct()
+            .sorted()
+    }
+    
+    val filteredDocuments = remember(documents, searchQuery, selectedCategory) {
+        documents.filter { doc ->
+            val matchesSearch = searchQuery.isBlank() || 
+                doc.fileName.contains(searchQuery, ignoreCase = true)
+            val matchesCategory = selectedCategory == null || 
+                doc.category == selectedCategory
+            matchesSearch && matchesCategory
+        }
+    }
+    
+    val hasActiveFilters = searchQuery.isNotBlank() || selectedCategory != null
     
     Column(
         modifier = Modifier
@@ -395,6 +418,80 @@ fun HomeScreen(viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> U
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.padding(bottom = 16.dp)
         )
+        
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            modifier = Modifier.fillMaxWidth(),
+            placeholder = { Text("Search documents...") },
+            leadingIcon = { Icon(Icons.Default.Search, "Search") },
+            trailingIcon = {
+                if (searchQuery.isNotBlank()) {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(Icons.Default.Clear, "Clear search")
+                    }
+                }
+            },
+            singleLine = true,
+            shape = MaterialTheme.shapes.medium
+        )
+        
+        if (allCategories.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(12.dp))
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    FilterChip(
+                        selected = selectedCategory == null,
+                        onClick = { selectedCategory = null },
+                        label = { Text("All") },
+                        leadingIcon = if (selectedCategory == null) {
+                            { Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp)) }
+                        } else null
+                    )
+                }
+                items(allCategories) { category ->
+                    FilterChip(
+                        selected = selectedCategory == category,
+                        onClick = { 
+                            selectedCategory = if (selectedCategory == category) null else category 
+                        },
+                        label = { Text(category) },
+                        leadingIcon = if (selectedCategory == category) {
+                            { Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp)) }
+                        } else null
+                    )
+                }
+            }
+        }
+        
+        if (hasActiveFilters) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${filteredDocuments.size} of ${documents.size} documents",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                TextButton(
+                    onClick = { 
+                        searchQuery = ""
+                        selectedCategory = null
+                    }
+                ) {
+                    Icon(Icons.Default.Clear, null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Clear filters")
+                }
+            }
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
         
         if (documents.isEmpty()) {
             Box(
@@ -421,11 +518,36 @@ fun HomeScreen(viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> U
                     )
                 }
             }
+        } else if (filteredDocuments.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "No documents found",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Try adjusting your search or filters",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(documents) { doc ->
+                items(filteredDocuments) { doc ->
                     DocumentCard(doc, viewModel, onClick = { onViewDocument(doc) })
                 }
             }
