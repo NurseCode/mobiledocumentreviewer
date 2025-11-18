@@ -814,8 +814,10 @@ fun ScanScreen(viewModel: PdfViewModel) {
                                 val docType = CameraUtils.detectDocumentType(ocrResults[0].fullText)
                                 when (docType) {
                                     com.pdfcomposer.app.DocumentType.RECEIPT -> "Receipt_$timestamp"
-                                    com.pdfcomposer.app.DocumentType.DOCUMENT -> "Document_$timestamp"
-                                    else -> "Scan_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.CONTRACT -> "Contract_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.FORM -> "Form_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.LETTER -> "Letter_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.GENERAL -> "Document_$timestamp"
                                 }
                             } else {
                                 "Scan_$timestamp"
