@@ -13,6 +13,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -36,6 +38,16 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sqrt
 
+// Custom Saver for Rect to survive configuration changes (rotation)
+val RectSaver = Saver<Rect?, List<Float>>(
+    save = { rect ->
+        rect?.let { listOf(it.left, it.top, it.right, it.bottom) }
+    },
+    restore = { list ->
+        if (list.size == 4) Rect(list[0], list[1], list[2], list[3]) else null
+    }
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CropScreen(
@@ -46,7 +58,7 @@ fun CropScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var imageBitmap by remember { mutableStateOf<ImageBitmap?>(null) }
-    var cropRect by remember { mutableStateOf<Rect?>(null) }
+    var cropRect by rememberSaveable(stateSaver = RectSaver) { mutableStateOf<Rect?>(null) }
     var isSaving by remember { mutableStateOf(false) }
     
     LaunchedEffect(imageFile) {
@@ -341,8 +353,8 @@ fun CropView(
  * Detect which handle (corner or edge) the user is grabbing
  */
 fun detectHandle(rect: Rect, touchX: Float, touchY: Float): CropHandle {
-    val cornerThreshold = 60f  // Larger hit area for corners
-    val edgeThreshold = 40f     // Hit area for edge handles
+    val cornerThreshold = 100f  // Very large hit area for corners (easier to grab on phone)
+    val edgeThreshold = 80f     // Large hit area for edge handles
     
     // Calculate center points for edge handles
     val centerX = (rect.left + rect.right) / 2

@@ -248,6 +248,7 @@ fun MainScreen(viewModel: PdfViewModel) {
     var showOnboarding by remember { mutableStateOf(false) }
     var selectedScreen by remember { mutableStateOf(Screen.Home) }
     var viewingDocument by remember { mutableStateOf<StoredPdfDocument?>(null) }
+    var galleryImageToCrop by remember { mutableStateOf<File?>(null) }  // Track gallery import crop flow
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp > 600
     val scope = rememberCoroutineScope()
@@ -290,6 +291,37 @@ fun MainScreen(viewModel: PdfViewModel) {
         return
     }
     
+    // Show crop screen for gallery-imported images
+    if (galleryImageToCrop != null) {
+        CropScreen(
+            imageFile = galleryImageToCrop!!,
+            onCropComplete = { croppedFile ->
+                scope.launch {
+                    // Convert cropped image to PDF
+                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                    val pdfFile = File(context.cacheDir, "scanned_$timestamp.pdf")
+                    
+                    val result = ImageToPdfUtils.imageToPdf(context, croppedFile, pdfFile)
+                    result.onSuccess { pdf ->
+                        // Add to database
+                        viewModel.addDocument("scanned_$timestamp.pdf", pdf.absolutePath, 1)
+                    }
+                    
+                    // Clean up
+                    croppedFile.delete()
+                    galleryImageToCrop?.delete()
+                    galleryImageToCrop = null
+                }
+            },
+            onCancel = {
+                // Clean up and go back
+                galleryImageToCrop?.delete()
+                galleryImageToCrop = null
+            }
+        )
+        return
+    }
+    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -305,32 +337,25 @@ fun MainScreen(viewModel: PdfViewModel) {
                 NavigationBar {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Home, "Home") },
-                        label = { Text("Home", maxLines = 1) },
+                        label = { Text("Home", style = MaterialTheme.typography.labelSmall) },
                         selected = selectedScreen == Screen.Home,
                         onClick = { selectedScreen = Screen.Home }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.CameraAlt, "Scan") },
-                        label = { Text("Scan", maxLines = 1) },
+                        label = { Text("Scan", style = MaterialTheme.typography.labelSmall) },
                         selected = selectedScreen == Screen.Scan,
                         onClick = { selectedScreen = Screen.Scan }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Edit, "Tools") },
-                        label = { Text("Tools", maxLines = 1) },
+                        label = { Text("Tools", style = MaterialTheme.typography.labelSmall) },
                         selected = selectedScreen == Screen.Tools,
                         onClick = { selectedScreen = Screen.Tools }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, "Settings") },
-                        label = { 
-                            Text(
-                                "Settings",
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.labelSmall
-                            ) 
-                        },
+                        label = { Text("Settings", style = MaterialTheme.typography.labelSmall) },
                         selected = selectedScreen == Screen.Settings,
                         onClick = { selectedScreen = Screen.Settings }
                     )
@@ -737,29 +762,21 @@ fun ScanScreen(viewModel: PdfViewModel) {
         uri?.let {
             scope.launch {
                 isProcessing = true
-                processingMessage = "Converting image to PDF..."
+                processingMessage = "Preparing image..."
                 
                 try {
                     // Create temp file from URI
                     val inputStream = context.contentResolver.openInputStream(it)
-                    val tempImageFile = File(context.cacheDir, "temp_image.jpg")
+                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                    val tempImageFile = File(context.cacheDir, "gallery_${timestamp}.jpg")
                     inputStream?.use { input ->
                         tempImageFile.outputStream().use { output ->
                             input.copyTo(output)
                         }
                     }
                     
-                    // Convert to PDF
-                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                    val pdfFile = File(context.cacheDir, "scanned_$timestamp.pdf")
-                    
-                    val result = ImageToPdfUtils.imageToPdf(context, tempImageFile, pdfFile)
-                    result.onSuccess { pdf ->
-                        // Add to database (file is in cache)
-                        viewModel.addDocument("scanned_$timestamp.pdf", pdf.absolutePath, 1)
-                    }
-                    
-                    tempImageFile.delete()
+                    // Show crop screen instead of directly converting to PDF
+                    galleryImageToCrop = tempImageFile
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
@@ -1353,19 +1370,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = imageQuality == ImageQuality.HIGH,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.HIGH) } },
-                            label = { Text("High", maxLines = 1) },
+                            label = { Text("High", style = MaterialTheme.typography.bodySmall) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.MEDIUM,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.MEDIUM) } },
-                            label = { Text("Medium", maxLines = 1) },
+                            label = { Text("Medium", style = MaterialTheme.typography.bodySmall) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.LOW,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.LOW) } },
-                            label = { Text("Low", maxLines = 1) },
+                            label = { Text("Low", style = MaterialTheme.typography.bodySmall) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1440,19 +1457,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = theme == AppTheme.LIGHT,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.LIGHT) } },
-                            label = { Text("Light", maxLines = 1) },
+                            label = { Text("Light", style = MaterialTheme.typography.bodySmall) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.DARK,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.DARK) } },
-                            label = { Text("Dark", maxLines = 1) },
+                            label = { Text("Dark", style = MaterialTheme.typography.bodySmall) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.SYSTEM,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.SYSTEM) } },
-                            label = { Text("System", maxLines = 1) },
+                            label = { Text("System", style = MaterialTheme.typography.bodySmall) },
                             modifier = Modifier.weight(1f)
                         )
                     }
