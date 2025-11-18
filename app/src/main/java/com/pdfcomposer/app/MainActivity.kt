@@ -1,6 +1,7 @@
 package com.pdfcomposer.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfDocument
@@ -678,6 +679,13 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
     }
 }
 
+data class PendingSaveData(
+    val pdfFile: File,
+    val pageCount: Int,
+    val suggestedName: String,
+    val ocrResults: List<OcrResult>
+)
+
 @Composable
 fun ScanScreen(viewModel: PdfViewModel) {
     val context = LocalContext.current
@@ -699,13 +707,6 @@ fun ScanScreen(viewModel: PdfViewModel) {
     var processingMessage by remember { mutableStateOf("") }
     var showNamingDialog by remember { mutableStateOf(false) }
     var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
-    
-    data class PendingSaveData(
-        val pdfFile: File,
-        val pageCount: Int,
-        val suggestedName: String,
-        val ocrResults: List<OcrResult>
-    )
     
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()

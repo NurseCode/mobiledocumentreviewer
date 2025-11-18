@@ -53,7 +53,7 @@ fun CameraScreen(
         val preview = Preview.Builder().build()
         
         // Configure ImageCapture with rotation from PreviewView display
-        val rotation = previewView.display?.rotation ?: android.view.Surface.ROTATION_0
+        val rotation = previewView!!.display?.rotation ?: android.view.Surface.ROTATION_0
         val imageCaptureBuilder = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .setTargetRotation(rotation)
@@ -70,7 +70,7 @@ fun CameraScreen(
                 imageCapture
             )
             
-            preview.setSurfaceProvider(previewView.surfaceProvider)
+            preview.setSurfaceProvider(previewView!!.surfaceProvider)
         } catch (e: Exception) {
             e.printStackTrace()
         }
