@@ -248,7 +248,6 @@ fun MainScreen(viewModel: PdfViewModel) {
     var showOnboarding by remember { mutableStateOf(false) }
     var selectedScreen by remember { mutableStateOf(Screen.Home) }
     var viewingDocument by remember { mutableStateOf<StoredPdfDocument?>(null) }
-    var galleryImageToCrop by remember { mutableStateOf<File?>(null) }  // Track gallery import crop flow
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp > 600
     val scope = rememberCoroutineScope()
@@ -291,37 +290,6 @@ fun MainScreen(viewModel: PdfViewModel) {
         return
     }
     
-    // Show crop screen for gallery-imported images
-    if (galleryImageToCrop != null) {
-        CropScreen(
-            imageFile = galleryImageToCrop!!,
-            onCropComplete = { croppedFile ->
-                scope.launch {
-                    // Convert cropped image to PDF
-                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
-                    val pdfFile = File(context.cacheDir, "scanned_$timestamp.pdf")
-                    
-                    val result = ImageToPdfUtils.imageToPdf(context, croppedFile, pdfFile)
-                    result.onSuccess { pdf ->
-                        // Add to database
-                        viewModel.addDocument("scanned_$timestamp.pdf", pdf.absolutePath, 1)
-                    }
-                    
-                    // Clean up
-                    croppedFile.delete()
-                    galleryImageToCrop?.delete()
-                    galleryImageToCrop = null
-                }
-            },
-            onCancel = {
-                // Clean up and go back
-                galleryImageToCrop?.delete()
-                galleryImageToCrop = null
-            }
-        )
-        return
-    }
-    
     Scaffold(
         topBar = {
             TopAppBar(
@@ -337,25 +305,25 @@ fun MainScreen(viewModel: PdfViewModel) {
                 NavigationBar {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Home, "Home") },
-                        label = { Text("Home", style = MaterialTheme.typography.labelSmall) },
+                        label = { Text("Home", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Home,
                         onClick = { selectedScreen = Screen.Home }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.CameraAlt, "Scan") },
-                        label = { Text("Scan", style = MaterialTheme.typography.labelSmall) },
+                        label = { Text("Scan", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Scan,
                         onClick = { selectedScreen = Screen.Scan }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Edit, "Tools") },
-                        label = { Text("Tools", style = MaterialTheme.typography.labelSmall) },
+                        label = { Text("Tools", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Tools,
                         onClick = { selectedScreen = Screen.Tools }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, "Settings") },
-                        label = { Text("Settings", style = MaterialTheme.typography.labelSmall) },
+                        label = { Text("Settings", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Settings,
                         onClick = { selectedScreen = Screen.Settings }
                     )
@@ -406,8 +374,7 @@ fun MainScreen(viewModel: PdfViewModel) {
                         ScreenContent(
                             selectedScreen, 
                             viewModel, 
-                            onViewDocument = { viewingDocument = it },
-                            onGalleryImageSelected = { galleryImageToCrop = it }
+                            onViewDocument = { viewingDocument = it }
                         )
                     }
                 }
@@ -426,8 +393,7 @@ fun MainScreen(viewModel: PdfViewModel) {
                     ScreenContent(
                         selectedScreen, 
                         viewModel, 
-                        onViewDocument = { viewingDocument = it },
-                        onGalleryImageSelected = { galleryImageToCrop = it }
+                        onViewDocument = { viewingDocument = it }
                     )
                 }
             }
@@ -439,12 +405,11 @@ fun MainScreen(viewModel: PdfViewModel) {
 fun ScreenContent(
     screen: Screen, 
     viewModel: PdfViewModel, 
-    onViewDocument: (StoredPdfDocument) -> Unit = {},
-    onGalleryImageSelected: (File) -> Unit = {}
+    onViewDocument: (StoredPdfDocument) -> Unit = {}
 ) {
     when (screen) {
         Screen.Home -> HomeScreen(viewModel, onViewDocument)
-        Screen.Scan -> ScanScreen(viewModel, onGalleryImageSelected)
+        Screen.Scan -> ScanScreen(viewModel)
         Screen.Tools -> ToolsScreen(viewModel)
         Screen.Settings -> SettingsScreen()
     }
@@ -690,21 +655,40 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         leadingIcon = { Icon(Icons.Default.Share, null) },
                         onClick = {
                             showMenu = false
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "application/pdf"
+                            try {
                                 val uri = if (document.filePath.startsWith("content://")) {
                                     Uri.parse(document.filePath)
                                 } else {
+                                    val file = File(document.filePath)
+                                    if (!file.exists()) {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "File not found: ${document.fileName}",
+                                            android.widget.Toast.LENGTH_LONG
+                                        ).show()
+                                        return@DropdownMenuItem
+                                    }
                                     androidx.core.content.FileProvider.getUriForFile(
                                         context,
                                         "${context.packageName}.fileprovider",
-                                        File(document.filePath)
+                                        file
                                     )
                                 }
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/pdf"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Share PDF"))
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Failed to share PDF: ${e.message}",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
                             }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share PDF"))
                         }
                     )
                     DropdownMenuItem(
@@ -741,10 +725,7 @@ data class PendingSaveData(
 )
 
 @Composable
-fun ScanScreen(
-    viewModel: PdfViewModel,
-    onGalleryImageSelected: (File) -> Unit = {}
-) {
+fun ScanScreen(viewModel: PdfViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val settingsManager = remember { SettingsManager(context) }
@@ -764,6 +745,7 @@ fun ScanScreen(
     var processingMessage by remember { mutableStateOf("") }
     var showNamingDialog by remember { mutableStateOf(false) }
     var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
+    var galleryImageToCrop by remember { mutableStateOf<File?>(null) }
     
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -793,8 +775,8 @@ fun ScanScreen(
                         }
                     }
                     
-                    // Show crop screen instead of directly converting to PDF
-                    onGalleryImageSelected(tempImageFile)
+                    // Show crop screen
+                    galleryImageToCrop = tempImageFile
                 } catch (e: Exception) {
                     e.printStackTrace()
                 } finally {
@@ -818,6 +800,76 @@ fun ScanScreen(
             // TODO: Get page count from PDF
             viewModel.addDocument(fileName, it.toString(), 1)
         }
+    }
+    
+    // Show crop screen for gallery-imported images
+    if (galleryImageToCrop != null) {
+        CropScreen(
+            imageFile = galleryImageToCrop!!,
+            onCropComplete = { croppedFile ->
+                scope.launch {
+                    isProcessing = true
+                    processingMessage = "Converting to PDF..."
+                    
+                    try {
+                        val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                        val pdfFile = File(context.cacheDir, "import_$timestamp.pdf")
+                        
+                        // Perform OCR on the image
+                        val ocrResult = CameraUtils.extractTextFromImage(context, croppedFile)
+                        val ocrResults = mutableListOf<OcrResult>()
+                        ocrResult.onSuccess { ocr ->
+                            ocrResults.add(ocr)
+                        }
+                        
+                        // Convert to PDF
+                        val result = ImageToPdfUtils.imageToPdf(context, croppedFile, pdfFile)
+                        result.onSuccess { pdf ->
+                            // Generate smart filename from OCR
+                            val suggestedName = if (ocrResults.isNotEmpty()) {
+                                val docType = CameraUtils.detectDocumentType(ocrResults[0].fullText)
+                                when (docType) {
+                                    com.pdfcomposer.app.DocumentType.RECEIPT -> "Receipt_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.CONTRACT -> "Contract_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.FORM -> "Form_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.LETTER -> "Letter_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.GENERAL -> "Document_$timestamp"
+                                }
+                            } else {
+                                "Import_$timestamp"
+                            }
+                            
+                            // Store data and show naming dialog
+                            pendingSaveData = PendingSaveData(
+                                pdfFile = pdf,
+                                pageCount = 1,
+                                suggestedName = suggestedName,
+                                ocrResults = ocrResults
+                            )
+                            showNamingDialog = true
+                        }
+                        
+                        // Clean up temp files
+                        croppedFile.delete()
+                        galleryImageToCrop?.delete()
+                        galleryImageToCrop = null
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        croppedFile.delete()
+                        galleryImageToCrop?.delete()
+                        galleryImageToCrop = null
+                    } finally {
+                        isProcessing = false
+                    }
+                }
+            },
+            onCancel = {
+                // Clean up and go back
+                galleryImageToCrop?.delete()
+                galleryImageToCrop = null
+            }
+        )
+        return
     }
     
     if (showMultiPageScan) {
@@ -1388,19 +1440,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = imageQuality == ImageQuality.HIGH,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.HIGH) } },
-                            label = { Text("High", style = MaterialTheme.typography.bodySmall) },
+                            label = { Text("High", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.MEDIUM,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.MEDIUM) } },
-                            label = { Text("Medium", style = MaterialTheme.typography.bodySmall) },
+                            label = { Text("Medium", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.LOW,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.LOW) } },
-                            label = { Text("Low", style = MaterialTheme.typography.bodySmall) },
+                            label = { Text("Low", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1475,19 +1527,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = theme == AppTheme.LIGHT,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.LIGHT) } },
-                            label = { Text("Light", style = MaterialTheme.typography.bodySmall) },
+                            label = { Text("Light", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.DARK,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.DARK) } },
-                            label = { Text("Dark", style = MaterialTheme.typography.bodySmall) },
+                            label = { Text("Dark", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.SYSTEM,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.SYSTEM) } },
-                            label = { Text("System", style = MaterialTheme.typography.bodySmall) },
+                            label = { Text("System", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                             modifier = Modifier.weight(1f)
                         )
                     }
