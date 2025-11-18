@@ -268,7 +268,9 @@ fun MainScreen(viewModel: PdfViewModel) {
                         PdfViewerScreen(
                             pdfPath = viewingDocument!!.filePath,
                             fileName = viewingDocument!!.fileName,
-                            onBack = { viewingDocument = null }
+                            onBack = { viewingDocument = null },
+                            viewModel = viewModel,
+                            pdfUri = viewingDocument!!.filePath
                         )
                     } else {
                         ScreenContent(selectedScreen, viewModel, onViewDocument = { viewingDocument = it })
@@ -281,7 +283,9 @@ fun MainScreen(viewModel: PdfViewModel) {
                     PdfViewerScreen(
                         pdfPath = viewingDocument!!.filePath,
                         fileName = viewingDocument!!.fileName,
-                        onBack = { viewingDocument = null }
+                        onBack = { viewingDocument = null },
+                        viewModel = viewModel,
+                        pdfUri = viewingDocument!!.filePath
                     )
                 } else {
                     ScreenContent(selectedScreen, viewModel, onViewDocument = { viewingDocument = it })
