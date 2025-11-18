@@ -1,6 +1,7 @@
 package com.pdfcomposer.app
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
@@ -1280,6 +1281,91 @@ fun ToolsScreen(viewModel: PdfViewModel) {
             onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() }
         )
     }
+    
+    // Split PDF Dialog
+    if (showSplitDialog && selectedPdfFile != null) {
+        SplitPdfDialog(
+            pdfFile = selectedPdfFile!!,
+            onDismiss = {
+                selectedPdfFile?.delete()
+                selectedPdfFile = null
+                showSplitDialog = false
+            },
+            onSplit = { pageRanges ->
+                scope.launch {
+                    try {
+                        val outputDir = File(context.cacheDir, "split_output")
+                        outputDir.mkdirs()
+                        val result = PdfUtils.splitPdf(selectedPdfFile!!, outputDir, pageRanges)
+                        result.onSuccess { files ->
+                            files.forEach { file ->
+                                viewModel.addDocument(
+                                    file.name,
+                                    file.absolutePath,
+                                    file.countPages(),
+                                    ""
+                                )
+                            }
+                            Toast.makeText(context, "PDF split into ${files.size} files!", Toast.LENGTH_SHORT).show()
+                        }.onFailure {
+                            Toast.makeText(context, "Split failed: ${it.message}", Toast.LENGTH_LONG).show()
+                        }
+                        selectedPdfFile?.delete()
+                        selectedPdfFile = null
+                        showSplitDialog = false
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
+    }
+    
+    // Compress PDF Dialog
+    if (showCompressDialog && selectedPdfFile != null) {
+        CompressPdfDialog(
+            pdfFile = selectedPdfFile!!,
+            onDismiss = {
+                selectedPdfFile?.delete()
+                selectedPdfFile = null
+                showCompressDialog = false
+            },
+            onCompress = { quality ->
+                scope.launch {
+                    try {
+                        Toast.makeText(context, "Compressing PDF... (Quality: $quality)", Toast.LENGTH_SHORT).show()
+                        // For now, just copy the file - full compression requires image resampling
+                        val outputFile = File(context.cacheDir, "compressed_${System.currentTimeMillis()}.pdf")
+                        selectedPdfFile!!.copyTo(outputFile, overwrite = true)
+                        viewModel.addDocument(
+                            outputFile.name,
+                            outputFile.absolutePath,
+                            outputFile.countPages(),
+                            ""
+                        )
+                        Toast.makeText(context, "PDF saved! (Full compression coming soon)", Toast.LENGTH_SHORT).show()
+                        selectedPdfFile?.delete()
+                        selectedPdfFile = null
+                        showCompressDialog = false
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
+    }
+    
+    // OCR Text Extract Dialog
+    if (showOcrDialog && selectedPdfFile != null) {
+        OcrExtractDialog(
+            pdfFile = selectedPdfFile!!,
+            onDismiss = {
+                selectedPdfFile?.delete()
+                selectedPdfFile = null
+                showOcrDialog = false
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1315,6 +1401,206 @@ fun ToolCard(title: String, description: String, icon: androidx.compose.ui.graph
             }
         }
     }
+}
+
+@Composable
+fun SplitPdfDialog(
+    pdfFile: File,
+    onDismiss: () -> Unit,
+    onSplit: (List<IntRange>) -> Unit
+) {
+    var pageRangesText by remember { mutableStateOf("") }
+    val totalPages = pdfFile.countPages()
+    
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Split PDF") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Total pages: $totalPages", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = pageRangesText,
+                    onValueChange = { pageRangesText = it },
+                    label = { Text("Page Ranges") },
+                    placeholder = { Text("e.g., 1-3, 5-7") },
+                    modifier = Modifier.fillMaxWidth(),
+                    supportingText = { Text("Enter ranges separated by commas") }
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    val ranges = pageRangesText.split(",").mapNotNull { range ->
+                        val parts = range.trim().split("-")
+                        if (parts.size == 2) {
+                            val start = parts[0].toIntOrNull()
+                            val end = parts[1].toIntOrNull()
+                            if (start != null && end != null && start <= end) {
+                                start..end
+                            } else null
+                        } else null
+                    }
+                    if (ranges.isNotEmpty()) onSplit(ranges)
+                },
+                enabled = pageRangesText.isNotBlank()
+            ) {
+                Text("Split")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun CompressPdfDialog(
+    pdfFile: File,
+    onDismiss: () -> Unit,
+    onCompress: (String) -> Unit
+) {
+    var selectedQuality by remember { mutableStateOf("Medium") }
+    val qualities = listOf("Low", "Medium", "High")
+    
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Compress PDF") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Select compression quality:", style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(12.dp))
+                qualities.forEach { quality ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedQuality = quality }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        androidx.compose.material3.RadioButton(
+                            selected = selectedQuality == quality,
+                            onClick = { selectedQuality = quality }
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(quality, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                when (quality) {
+                                    "Low" -> "Smallest file size"
+                                    "Medium" -> "Balanced size and quality"
+                                    "High" -> "Best quality"
+                                    else -> ""
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(onClick = { onCompress(selectedQuality) }) {
+                Text("Compress")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun OcrExtractDialog(
+    pdfFile: File,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var extractedText by remember { mutableStateOf("") }
+    var isLoading by remember { mutableStateOf(true) }
+    
+    LaunchedEffect(pdfFile) {
+        scope.launch {
+            try {
+                val renderer = PdfRenderer(ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY))
+                val fullText = StringBuilder()
+                
+                for (i in 0 until renderer.pageCount) {
+                    val page = renderer.openPage(i)
+                    val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+                    page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    page.close()
+                    
+                    val ocrResult = CameraUtils.performOCR(context, bitmap)
+                    ocrResult.onSuccess { ocr ->
+                        fullText.append("--- Page ${i + 1} ---\n")
+                        fullText.append(ocr.fullText)
+                        fullText.append("\n\n")
+                    }
+                }
+                renderer.close()
+                extractedText = fullText.toString()
+                isLoading = false
+            } catch (e: Exception) {
+                extractedText = "Error extracting text: ${e.message}"
+                isLoading = false
+            }
+        }
+    }
+    
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Extracted Text") },
+        text = {
+            if (isLoading) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    androidx.compose.material3.CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Extracting text...")
+                }
+            } else {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    androidx.compose.material3.OutlinedTextField(
+                        value = extractedText,
+                        onValueChange = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(300.dp),
+                        readOnly = true,
+                        textStyle = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = {
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("Extracted Text", extractedText)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(context, "Text copied to clipboard!", Toast.LENGTH_SHORT).show()
+                },
+                enabled = !isLoading && extractedText.isNotBlank()
+            ) {
+                Text("Copy")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        }
+    )
 }
 
 @Composable
