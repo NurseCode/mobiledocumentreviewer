@@ -40,6 +40,12 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ⏳ Pinch-to-zoom/pan in crop tool (pending - requires custom gesture implementation)
 
 ## Recent Changes
+**Date**: November 18, 2025 (Latest)
+- ✅ **Fixed critical UX and crash issues**
+  - **Naming dialog visibility**: Moved gallery import crop flow to ScanScreen so naming dialog appears automatically after crop (no more scrolling to find it)
+  - **Text wrapping fixed**: Added maxLines=1 and TextOverflow.Ellipsis to navigation bar items and FilterChips - full "Settings", "Medium", "System" text now visible
+  - **Share crash prevention**: Added try-catch error handling with file existence check and user-friendly Toast messages when sharing PDFs to Dropbox/cloud services fails
+
 **Date**: November 18, 2025
 - ✅ **Fixed all user-reported UI and crop tool issues**
   - **Navigation bar**: Applied labelSmall to ALL tabs (Home, Scan, Tools, Settings) - no more "Setti..." truncation
