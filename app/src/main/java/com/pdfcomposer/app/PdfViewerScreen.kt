@@ -2,6 +2,7 @@ package com.pdfcomposer.app
 
 import android.graphics.Bitmap
 import android.graphics.pdf.PdfRenderer
+import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -69,15 +70,24 @@ fun PdfViewerScreen(
             
             try {
                 val bitmaps = withContext(Dispatchers.IO) {
-                    val pdfFile = File(pdfPath)
-                    if (!pdfFile.exists()) {
-                        throw Exception("PDF file not found")
+                    // Handle both content:// URIs (from SAF) and file paths (from cache)
+                    fileDescriptor = if (pdfPath.startsWith("content://")) {
+                        // Open via ContentResolver for SAF URIs
+                        val uri = Uri.parse(pdfPath)
+                        context.contentResolver.openFileDescriptor(uri, "r")
+                            ?: throw Exception("Could not open PDF from URI")
+                    } else {
+                        // Open as regular file for cache files
+                        val pdfFile = File(pdfPath)
+                        if (!pdfFile.exists()) {
+                            throw Exception("PDF file not found")
+                        }
+                        ParcelFileDescriptor.open(
+                            pdfFile,
+                            ParcelFileDescriptor.MODE_READ_ONLY
+                        )
                     }
                     
-                    fileDescriptor = ParcelFileDescriptor.open(
-                        pdfFile,
-                        ParcelFileDescriptor.MODE_READ_ONLY
-                    )
                     pdfRenderer = PdfRenderer(fileDescriptor!!)
                     
                     // Render pages one at a time to avoid memory issues

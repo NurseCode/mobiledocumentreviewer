@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.net.Uri
+import androidx.exifinterface.media.ExifInterface
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -69,6 +70,28 @@ object CameraUtils {
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
             var bitmap = BitmapFactory.decodeFile(sourceFile.absolutePath)
+            
+            // Fix orientation based on EXIF data
+            val exif = ExifInterface(sourceFile.absolutePath)
+            val orientation = exif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+            
+            val rotationDegrees = when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+            
+            // Apply rotation if needed
+            if (rotationDegrees != 0f) {
+                val matrix = Matrix().apply {
+                    postRotate(rotationDegrees)
+                }
+                bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            }
             
             // Resize if needed
             if (bitmap.width > maxDimension || bitmap.height > maxDimension) {
