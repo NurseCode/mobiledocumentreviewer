@@ -41,6 +41,10 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 
 ## Recent Changes
 **Date**: November 18, 2025
+- ✅ **Fixed crop tool and UI text issues**
+  - Fixed crop tool gesture detection (moved from Canvas to Box wrapper)
+  - Fixed "Settings" text cutoff in bottom navigation bar
+  - Fixed FilterChip text wrapping in Settings screen ("Medium", "System")
 - ✅ **Added pinch-to-zoom to PDF viewer**
   - Two-finger pinch to zoom (1x to 5x magnification)
   - Pan around zoomed pages with two fingers
