@@ -40,7 +40,14 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ⏳ Pinch-to-zoom/pan in crop tool (pending - requires custom gesture implementation)
 
 ## Recent Changes
-**Date**: November 18, 2025 (Latest)
+**Date**: November 18, 2025 (Latest - Round 2)
+- ✅ **Fixed all persistent bugs reported by user**
+  - **Onboarding persistence**: Fixed LaunchedEffect to properly set `showOnboarding = !hasCompletedOnboarding` so folder selection is one-time only (was repeating every app launch)
+  - **Gallery naming dialog**: Fixed state update ordering - dialog states set BEFORE cleanup so naming dialog appears correctly after crop (was going straight to home screen)
+  - **Share crash for SAF documents**: Added coroutine scope and proper SAF URI handling - shares content:// URIs directly without FileProvider conversion (was crashing on Dropbox/Drive shares)
+  - **Text wrapping fully fixed**: Applied maxLines=1 + TextOverflow.Ellipsis to NavigationRail items (tablet) in addition to NavigationBar - "Settings", "Medium", "System" now display fully on all devices
+
+**Date**: November 18, 2025
 - ✅ **Fixed critical UX and crash issues**
   - **Naming dialog visibility**: Moved gallery import crop flow to ScanScreen so naming dialog appears automatically after crop (no more scrolling to find it)
   - **Text wrapping fixed**: Added maxLines=1 and TextOverflow.Ellipsis to navigation bar items and FilterChips - full "Settings", "Medium", "System" text now visible
