@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -55,11 +56,7 @@ class SettingsManager(private val context: Context) {
     }
     
     suspend fun getSafDirectoryUri(): String? {
-        var result: String? = null
-        context.dataStore.data.collect { preferences ->
-            result = preferences[SAF_DIRECTORY_URI_KEY]
-            return@collect
-        }
-        return result
+        val preferences = context.dataStore.data.first()
+        return preferences[SAF_DIRECTORY_URI_KEY]
     }
 }

@@ -50,29 +50,21 @@ object StorageUtils {
     }
     
     /**
-     * Save storage folder URI for persistent access
+     * DEPRECATED: Use SettingsManager instead
+     * This function is kept for backwards compatibility but does nothing
      */
+    @Deprecated("Use SettingsManager.setSafDirectoryUri instead")
     fun saveStorageFolderUri(context: Context, uri: Uri) {
-        // Take persistable permission
-        context.contentResolver.takePersistableUriPermission(
-            uri,
-            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-        )
-        
-        // Save to preferences
-        context.getSharedPreferences("storage_prefs", Context.MODE_PRIVATE)
-            .edit()
-            .putString("storage_folder_uri", uri.toString())
-            .apply()
+        // No-op - use SettingsManager instead
     }
     
     /**
-     * Get saved storage folder URI (null if not set)
+     * DEPRECATED: Use SettingsManager instead
+     * This function is kept for backwards compatibility
      */
+    @Deprecated("Use SettingsManager.safDirectoryUriFlow instead")
     fun getStorageFolderUri(context: Context): Uri? {
-        val uriString = context.getSharedPreferences("storage_prefs", Context.MODE_PRIVATE)
-            .getString("storage_folder_uri", null)
-        return uriString?.let { Uri.parse(it) }
+        return null  // Always return null to force using SettingsManager
     }
     
     /**
@@ -153,11 +145,14 @@ object StorageUtils {
     
     /**
      * Check if we have persistent access to the storage folder
+     * Note: This is a synchronous function - for Flow-based access, use SettingsManager.safDirectoryUriFlow
      */
-    fun hasStorageAccess(context: Context): Boolean {
-        val uri = getStorageFolderUri(context) ?: return false
+    suspend fun hasStorageAccess(context: Context): Boolean = withContext(Dispatchers.IO) {
+        val settingsManager = SettingsManager(context)
+        val uriString = settingsManager.getSafDirectoryUri() ?: return@withContext false
+        val uri = Uri.parse(uriString)
         
-        return try {
+        return@withContext try {
             val folder = DocumentFile.fromTreeUri(context, uri)
             folder != null && folder.exists() && folder.canWrite()
         } catch (e: Exception) {

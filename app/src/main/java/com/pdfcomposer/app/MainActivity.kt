@@ -231,10 +231,55 @@ fun dynamicColorScheme(): ColorScheme {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: PdfViewModel) {
+    val context = LocalContext.current
+    val settingsManager = remember { SettingsManager(context) }
+    val hasCompletedOnboarding by settingsManager.hasCompletedOnboardingFlow.collectAsState(initial = false)
+    val safDirectoryUri by settingsManager.safDirectoryUriFlow.collectAsState(initial = null)
+    
+    var showOnboarding by remember { mutableStateOf(false) }
     var selectedScreen by remember { mutableStateOf(Screen.Home) }
     var viewingDocument by remember { mutableStateOf<StoredPdfDocument?>(null) }
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp > 600
+    val scope = rememberCoroutineScope()
+    
+    // Check onboarding status on launch
+    LaunchedEffect(hasCompletedOnboarding) {
+        if (!hasCompletedOnboarding) {
+            showOnboarding = true
+        }
+    }
+    
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                // Take persistable permission
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                settingsManager.setSafDirectoryUri(it.toString())
+                settingsManager.setHasCompletedOnboarding(true)
+                showOnboarding = false
+            }
+        }
+    }
+    
+    if (showOnboarding) {
+        OnboardingScreen(
+            onSelectFolder = { folderPickerLauncher.launch(null) },
+            onSkip = {
+                scope.launch {
+                    settingsManager.setHasCompletedOnboarding(true)
+                    showOnboarding = false
+                }
+            }
+        )
+        return
+    }
     
     Scaffold(
         topBar = {
@@ -391,6 +436,10 @@ fun HomeScreen(viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> U
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: () -> Unit = {}) {
+    val context = LocalContext.current
+    var showMenu by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         onClick = onClick
@@ -413,16 +462,84 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                     text = document.fileName,
                     style = MaterialTheme.typography.titleMedium
                 )
-                Text(
-                    text = "${document.pageCount} pages",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "${document.pageCount} pages",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (document.category.isNotBlank()) {
+                        Text(
+                            text = " • ${document.category}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
             }
-            IconButton(onClick = { viewModel.deleteDocument(document) }) {
-                Icon(Icons.Default.Delete, "Delete")
+            
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, "More options")
+                }
+                
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("Rename") },
+                        leadingIcon = { Icon(Icons.Default.Edit, null) },
+                        onClick = {
+                            showMenu = false
+                            showRenameDialog = true
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Share") },
+                        leadingIcon = { Icon(Icons.Default.Share, null) },
+                        onClick = {
+                            showMenu = false
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/pdf"
+                                val uri = if (document.filePath.startsWith("content://")) {
+                                    Uri.parse(document.filePath)
+                                } else {
+                                    androidx.core.content.FileProvider.getUriForFile(
+                                        context,
+                                        "${context.packageName}.fileprovider",
+                                        File(document.filePath)
+                                    )
+                                }
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share PDF"))
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Delete") },
+                        leadingIcon = { Icon(Icons.Default.Delete, null) },
+                        onClick = {
+                            showMenu = false
+                            viewModel.deleteDocument(document)
+                        }
+                    )
+                }
             }
         }
+    }
+    
+    if (showRenameDialog) {
+        RenameDocumentDialog(
+            currentName = document.fileName,
+            currentCategory = document.category,
+            onSave = { newName, newCategory ->
+                viewModel.updateDocument(document.copy(fileName = newName, category = newCategory))
+                showRenameDialog = false
+            },
+            onCancel = { showRenameDialog = false }
+        )
     }
 }
 
@@ -430,6 +547,8 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
 fun ScanScreen(viewModel: PdfViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val settingsManager = remember { SettingsManager(context) }
+    val safDirectoryUri by settingsManager.safDirectoryUriFlow.collectAsState(initial = null)
     
     var hasCameraPermission by remember {
         mutableStateOf(
@@ -443,6 +562,15 @@ fun ScanScreen(viewModel: PdfViewModel) {
     var showMultiPageScan by remember { mutableStateOf(false) }
     var isProcessing by remember { mutableStateOf(false) }
     var processingMessage by remember { mutableStateOf("") }
+    var showNamingDialog by remember { mutableStateOf(false) }
+    var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
+    
+    data class PendingSaveData(
+        val pdfFile: File,
+        val pageCount: Int,
+        val suggestedName: String,
+        val ocrResults: List<OcrResult>
+    )
     
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -545,17 +673,29 @@ fun ScanScreen(viewModel: PdfViewModel) {
                         
                         val result = ImageToPdfUtils.imagesToPdf(context, optimizedFiles, pdfFile)
                         result.onSuccess { pdf ->
-                            // Add to database (file is in cache)
-                            viewModel.addDocument("scan_$timestamp.pdf", pdf.absolutePath, imageFiles.size)
-                            
-                            // Detect document type from first page
-                            if (ocrResults.isNotEmpty()) {
+                            // Generate smart filename from OCR
+                            val suggestedName = if (ocrResults.isNotEmpty()) {
                                 val docType = CameraUtils.detectDocumentType(ocrResults[0].fullText)
-                                // TODO: If receipt, offer to extract data
+                                when (docType) {
+                                    DocumentType.RECEIPT -> "Receipt_$timestamp"
+                                    DocumentType.DOCUMENT -> "Document_$timestamp"
+                                    else -> "Scan_$timestamp"
+                                }
+                            } else {
+                                "Scan_$timestamp"
                             }
+                            
+                            // Store data and show naming dialog
+                            pendingSaveData = PendingSaveData(
+                                pdfFile = pdf,
+                                pageCount = imageFiles.size,
+                                suggestedName = suggestedName,
+                                ocrResults = ocrResults
+                            )
+                            showNamingDialog = true
                         }
                         
-                        // Cleanup ALL temp files (optimized, original captures, temp PDF)
+                        // Cleanup optimized and captured images (keep PDF for now)
                         optimizedFiles.forEach { file ->
                             if (!file.delete() && file.exists()) {
                                 android.util.Log.w("ScanScreen", "Failed to delete optimized file: ${file.absolutePath}")
@@ -566,8 +706,6 @@ fun ScanScreen(viewModel: PdfViewModel) {
                                 android.util.Log.w("ScanScreen", "Failed to delete captured file: ${file.absolutePath}")
                             }
                         }
-                        // Delete temp PDF file from cache after SAF save
-                        pdfFile.delete()
                     } catch (e: Exception) {
                         e.printStackTrace()
                         // Ensure cleanup even on exception
@@ -674,6 +812,68 @@ fun ScanScreen(viewModel: PdfViewModel) {
                 }
             }
         }
+    }
+    
+    // Document naming dialog
+    if (showNamingDialog && pendingSaveData != null) {
+        DocumentNamingDialog(
+            suggestedName = pendingSaveData.suggestedName,
+            onSave = { fileName, category ->
+                scope.launch {
+                    isProcessing = true
+                    processingMessage = "Saving document..."
+                    
+                    try {
+                        val finalFileName = if (fileName.endsWith(".pdf")) fileName else "$fileName.pdf"
+                        
+                        // Save to SAF or fallback to app storage
+                        val savedUri = if (safDirectoryUri != null) {
+                            // Save to user-selected SAF location
+                            val folderUri = Uri.parse(safDirectoryUri)
+                            val pdfUri = StorageUtils.createPdfFile(context, folderUri, finalFileName)
+                            
+                            if (pdfUri != null) {
+                                StorageUtils.copyPdfToSaf(context, pendingSaveData.pdfFile, pdfUri)
+                                pdfUri.toString()
+                            } else {
+                                // Fallback: use app files directory
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), finalFileName)
+                                pendingSaveData.pdfFile.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                        } else {
+                            // No SAF folder selected - use app files directory
+                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), finalFileName)
+                            pendingSaveData.pdfFile.copyTo(appFile, overwrite = true)
+                            appFile.absolutePath
+                        }
+                        
+                        // Add to database
+                        viewModel.addDocument(finalFileName, savedUri, pendingSaveData.pageCount, category)
+                        
+                        // Clean up temp PDF
+                        pendingSaveData.pdfFile.delete()
+                        
+                        showNamingDialog = false
+                        pendingSaveData = null
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        // Still clean up
+                        pendingSaveData?.pdfFile?.delete()
+                        showNamingDialog = false
+                        pendingSaveData = null
+                    } finally {
+                        isProcessing = false
+                    }
+                }
+            },
+            onCancel = {
+                // Clean up temp PDF on cancel
+                pendingSaveData?.pdfFile?.delete()
+                showNamingDialog = false
+                pendingSaveData = null
+            }
+        )
     }
 }
 
@@ -868,6 +1068,62 @@ fun RenameDocumentDialog(
             }
         }
     )
+}
+
+@Composable
+fun OnboardingScreen(onSelectFolder: () -> Unit, onSkip: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(32.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                Icons.Default.Folder,
+                contentDescription = null,
+                modifier = Modifier.size(120.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                "Choose Storage Location",
+                style = MaterialTheme.typography.headlineMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                "Select a folder where your PDFs will be saved. This folder can be on your phone, Dropbox, Google Drive, or any other location.",
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                "Your documents will persist even if you uninstall the app!",
+                style = MaterialTheme.typography.bodyMedium,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(32.dp))
+            Button(
+                onClick = onSelectFolder,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Default.FolderOpen, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Select Folder")
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            TextButton(onClick = onSkip) {
+                Text("Skip (use temporary storage)")
+            }
+        }
+    }
 }
 
 enum class Screen {
