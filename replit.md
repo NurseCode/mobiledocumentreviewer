@@ -33,7 +33,7 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ✅ **Rename functionality via overflow menu**
 - ✅ **Three-dot overflow menu (rename/share/delete)**
 - ✅ **Category filtering and search UI**
-- ⏳ Settings UI (pending)
+- ✅ **Settings screen**
 - ⏳ Receipt JSON extraction (pending)
 - ⏳ Digital signatures (pending)
 
@@ -67,6 +67,16 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
   - Filter status counter ("X of Y documents")
   - Clear all filters button
   - Empty state for no matches
+- ✅ **Created comprehensive Settings screen**
+  - Storage location management (change SAF directory)
+  - Default category for new scans
+  - Image quality settings (High/Medium/Low)
+  - OCR language selection (8 languages)
+  - Auto-naming toggle
+  - Theme selection (Light/Dark/System)
+  - Sort order preferences
+  - Cache management
+  - App version and storage usage info
 
 ## User Preferences
 - **Development Environment**: Replit (no Android Studio due to storage limitations)
