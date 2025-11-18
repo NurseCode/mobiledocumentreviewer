@@ -56,6 +56,7 @@ data class StoredPdfDocument(
     val fileName: String,
     val filePath: String,
     val pageCount: Int,
+    val category: String = "",  // Folder/category name (e.g., "Client A", "Receipts")
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -79,8 +80,17 @@ interface PdfDocumentDao {
     @Query("SELECT * FROM pdf_documents ORDER BY createdAt DESC")
     fun getAllDocuments(): Flow<List<StoredPdfDocument>>
     
+    @Query("SELECT * FROM pdf_documents WHERE category = :category ORDER BY createdAt DESC")
+    fun getDocumentsByCategory(category: String): Flow<List<StoredPdfDocument>>
+    
+    @Query("SELECT DISTINCT category FROM pdf_documents WHERE category != '' ORDER BY category ASC")
+    fun getAllCategories(): Flow<List<String>>
+    
     @Insert
     suspend fun insert(document: StoredPdfDocument)
+    
+    @Update
+    suspend fun update(document: StoredPdfDocument)
     
     @Delete
     suspend fun delete(document: StoredPdfDocument)
@@ -89,7 +99,7 @@ interface PdfDocumentDao {
     suspend fun getCount(): Int
 }
 
-@Database(entities = [Bookmark::class, StoredPdfDocument::class], version = 1, exportSchema = false)
+@Database(entities = [Bookmark::class, StoredPdfDocument::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun pdfDocumentDao(): PdfDocumentDao
@@ -104,7 +114,9 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "pdf_composer_database"
-                ).build()
+                )
+                .fallbackToDestructiveMigration()  // For development; proper migration needed for production
+                .build()
                 INSTANCE = instance
                 instance
             }
@@ -135,9 +147,29 @@ class PdfViewModel(
         }
     }
     
-    fun addDocument(fileName: String, filePath: String, pageCount: Int) {
+    fun addDocument(fileName: String, filePath: String, pageCount: Int, category: String = "") {
         viewModelScope.launch {
-            pdfDocumentDao.insert(StoredPdfDocument(fileName = fileName, filePath = filePath, pageCount = pageCount))
+            pdfDocumentDao.insert(StoredPdfDocument(fileName = fileName, filePath = filePath, pageCount = pageCount, category = category))
+        }
+    }
+    
+    fun updateDocument(document: StoredPdfDocument) {
+        viewModelScope.launch {
+            pdfDocumentDao.update(document)
+        }
+    }
+    
+    fun renameDocument(document: StoredPdfDocument, newName: String) {
+        viewModelScope.launch {
+            val updated = document.copy(fileName = newName)
+            pdfDocumentDao.update(updated)
+        }
+    }
+    
+    fun updateDocumentCategory(document: StoredPdfDocument, newCategory: String) {
+        viewModelScope.launch {
+            val updated = document.copy(category = newCategory)
+            pdfDocumentDao.update(updated)
         }
     }
     
@@ -739,6 +771,103 @@ fun ToolCard(title: String, description: String, icon: androidx.compose.ui.graph
             }
         }
     }
+}
+
+@Composable
+fun DocumentNamingDialog(
+    suggestedName: String,
+    onSave: (fileName: String, category: String) -> Unit,
+    onCancel: () -> Unit
+) {
+    var fileName by remember { mutableStateOf(suggestedName) }
+    var category by remember { mutableStateOf("") }
+    
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Save Document") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("File Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = { Text("Folder/Category (optional)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("e.g., Client A, Receipts, Personal") }
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = { onSave(fileName, category) },
+                enabled = fileName.isNotBlank()
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onCancel) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun RenameDocumentDialog(
+    currentName: String,
+    currentCategory: String,
+    onSave: (fileName: String, category: String) -> Unit,
+    onCancel: () -> Unit
+) {
+    var fileName by remember { mutableStateOf(currentName) }
+    var category by remember { mutableStateOf(currentCategory) }
+    
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text("Edit Document") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = fileName,
+                    onValueChange = { fileName = it },
+                    label = { Text("File Name") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                androidx.compose.material3.OutlinedTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = { Text("Folder/Category") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("e.g., Client A, Receipts, Personal") }
+                )
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = { onSave(fileName, category) },
+                enabled = fileName.isNotBlank()
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onCancel) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 enum class Screen {

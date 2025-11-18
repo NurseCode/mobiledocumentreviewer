@@ -11,7 +11,7 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - Build without requiring Android Studio installation
 
 ## Current State
-**Status**: Core scanning and OCR features implemented
+**Status**: Core features complete; implementing document management system
 - ✅ Project structure created
 - ✅ MainActivity with Jetpack Compose UI
 - ✅ Room database for documents
@@ -25,6 +25,14 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ✅ **Multi-page camera scanning with unlimited pages**
 - ✅ **Dual-purpose OCR (general documents + receipt detection)**
 - ✅ **Searchable PDF creation with invisible text layers**
+- ✅ **PDF viewer with bookmark navigation**
+- ✅ **EXIF orientation fix added**
+- ✅ **Content URI support for SAF documents**
+- 🚧 **SAF persistent storage architecture (in progress)**
+- 🚧 **Document naming on creation (in progress)**
+- 🚧 **Folder/category organization (in progress)**
+- ⏳ Rename functionality (pending)
+- ⏳ Search and sorting (pending)
 - ⏳ Settings UI (pending)
 - ⏳ Receipt JSON extraction (pending)
 - ⏳ Digital signatures (pending)
