@@ -32,7 +32,7 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ✅ **Folder/category organization**
 - ✅ **Rename functionality via overflow menu**
 - ✅ **Three-dot overflow menu (rename/share/delete)**
-- ⏳ Category filtering and search UI (pending)
+- ✅ **Category filtering and search UI**
 - ⏳ Settings UI (pending)
 - ⏳ Receipt JSON extraction (pending)
 - ⏳ Digital signatures (pending)
@@ -60,6 +60,13 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
   - Added category field to PdfDocument
   - Proper migration handling
   - Rename and category management functions
+- ✅ **Implemented search and category filtering**
+  - Real-time search bar with clear button
+  - Category filter chips (horizontal scrolling)
+  - Combined search + category filtering
+  - Filter status counter ("X of Y documents")
+  - Clear all filters button
+  - Empty state for no matches
 
 ## User Preferences
 - **Development Environment**: Replit (no Android Studio due to storage limitations)
