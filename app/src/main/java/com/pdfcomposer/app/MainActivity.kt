@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -1608,56 +1610,50 @@ fun SettingsScreen() {
 
 @Composable
 fun OnboardingScreen(onSelectFolder: () -> Unit, onSkip: () -> Unit) {
-    Box(
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .verticalScroll(rememberScrollState())
             .padding(32.dp),
-        contentAlignment = Alignment.Center
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        Spacer(modifier = Modifier.weight(1f))
+        Icon(
+            Icons.Default.Folder,
+            contentDescription = null,
+            modifier = Modifier.size(100.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            "Choose Storage Location",
+            style = MaterialTheme.typography.headlineMedium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+        )
+        Text(
+            "Select a folder where your PDFs will be saved. This folder can be on your phone, Dropbox, Google Drive, or any other location.",
+            style = MaterialTheme.typography.bodyLarge,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            "Your documents will persist even if you uninstall the app!",
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            color = MaterialTheme.colorScheme.primary
+        )
+        Spacer(modifier = Modifier.weight(1f))
+        Button(
+            onClick = onSelectFolder,
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(
-                Icons.Default.Folder,
-                contentDescription = null,
-                modifier = Modifier.size(120.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(24.dp))
-            Text(
-                "Choose Storage Location",
-                style = MaterialTheme.typography.headlineMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "Select a folder where your PDFs will be saved. This folder can be on your phone, Dropbox, Google Drive, or any other location.",
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "Your documents will persist even if you uninstall the app!",
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-            Button(
-                onClick = onSelectFolder,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Default.FolderOpen, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Select Folder")
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            TextButton(onClick = onSkip) {
-                Text("Skip (use temporary storage)")
-            }
+            Icon(Icons.Default.FolderOpen, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Select Folder")
+        }
+        TextButton(onClick = onSkip) {
+            Text("Skip (use temporary storage)")
         }
     }
 }
