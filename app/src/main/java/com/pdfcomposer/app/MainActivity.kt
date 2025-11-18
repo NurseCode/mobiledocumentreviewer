@@ -313,6 +313,12 @@ fun MainScreen(viewModel: PdfViewModel) {
                         selected = selectedScreen == Screen.Tools,
                         onClick = { selectedScreen = Screen.Tools }
                     )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Settings, "Settings") },
+                        label = { Text("Settings") },
+                        selected = selectedScreen == Screen.Settings,
+                        onClick = { selectedScreen = Screen.Settings }
+                    )
                 }
             }
         }
@@ -339,6 +345,12 @@ fun MainScreen(viewModel: PdfViewModel) {
                         label = { Text("Tools") },
                         selected = selectedScreen == Screen.Tools,
                         onClick = { selectedScreen = Screen.Tools }
+                    )
+                    NavigationRailItem(
+                        icon = { Icon(Icons.Default.Settings, "Settings") },
+                        label = { Text("Settings") },
+                        selected = selectedScreen == Screen.Settings,
+                        onClick = { selectedScreen = Screen.Settings }
                     )
                 }
                 Box(modifier = Modifier.weight(1f)) {
@@ -379,6 +391,7 @@ fun ScreenContent(screen: Screen, viewModel: PdfViewModel, onViewDocument: (Stor
         Screen.Home -> HomeScreen(viewModel, onViewDocument)
         Screen.Scan -> ScanScreen(viewModel)
         Screen.Tools -> ToolsScreen(viewModel)
+        Screen.Settings -> SettingsScreen()
     }
 }
 
@@ -1192,6 +1205,403 @@ fun RenameDocumentDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen() {
+    val context = LocalContext.current
+    val settingsManager = remember { SettingsManager(context) }
+    val scope = rememberCoroutineScope()
+    
+    val safDirectoryUri by settingsManager.safDirectoryUriFlow.collectAsState(initial = null)
+    val defaultCategory by settingsManager.defaultCategoryFlow.collectAsState(initial = "")
+    val imageQuality by settingsManager.imageQualityFlow.collectAsState(initial = ImageQuality.HIGH)
+    val ocrLanguage by settingsManager.ocrLanguageFlow.collectAsState(initial = "en")
+    val autoNaming by settingsManager.autoNamingFlow.collectAsState(initial = true)
+    val theme by settingsManager.themeFlow.collectAsState(initial = AppTheme.SYSTEM)
+    val sortOrder by settingsManager.sortOrderFlow.collectAsState(initial = SortOrder.NEWEST_FIRST)
+    
+    var showCategoryDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var tempCategory by remember { mutableStateOf("") }
+    
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                context.contentResolver.takePersistableUriPermission(
+                    it,
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                settingsManager.setSafDirectoryUri(it.toString())
+            }
+        }
+    }
+    
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        item {
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+        }
+        
+        item {
+            Text(
+                text = "STORAGE & FILES",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+            )
+        }
+        
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { folderPickerLauncher.launch(null) }
+            ) {
+                ListItem(
+                    headlineContent = { Text("Storage Location") },
+                    supportingContent = { 
+                        Text(if (safDirectoryUri != null) "Configured" else "Not set - using temporary storage") 
+                    },
+                    leadingContent = { Icon(Icons.Default.Folder, null) },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, null) }
+                )
+            }
+        }
+        
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { showCategoryDialog = true }
+            ) {
+                ListItem(
+                    headlineContent = { Text("Default Category") },
+                    supportingContent = { Text(if (defaultCategory.isBlank()) "None" else defaultCategory) },
+                    leadingContent = { Icon(Icons.Default.Label, null) },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, null) }
+                )
+            }
+        }
+        
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    scope.launch {
+                        val cacheDir = context.cacheDir
+                        cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+                    }
+                }
+            ) {
+                ListItem(
+                    headlineContent = { Text("Clear Cache") },
+                    supportingContent = { Text("Remove temporary files") },
+                    leadingContent = { Icon(Icons.Default.Delete, null) }
+                )
+            }
+        }
+        
+        item {
+            Text(
+                text = "SCANNING & OCR",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+            )
+        }
+        
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    ListItem(
+                        headlineContent = { Text("Image Quality") },
+                        supportingContent = { Text("Compression level for scanned images") }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = imageQuality == ImageQuality.HIGH,
+                            onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.HIGH) } },
+                            label = { Text("High") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = imageQuality == ImageQuality.MEDIUM,
+                            onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.MEDIUM) } },
+                            label = { Text("Medium") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = imageQuality == ImageQuality.LOW,
+                            onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.LOW) } },
+                            label = { Text("Low") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+        
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { showLanguageDialog = true }
+            ) {
+                ListItem(
+                    headlineContent = { Text("OCR Language") },
+                    supportingContent = { 
+                        Text(when(ocrLanguage) {
+                            "en" -> "English"
+                            "es" -> "Spanish"
+                            "fr" -> "French"
+                            "de" -> "German"
+                            "it" -> "Italian"
+                            "pt" -> "Portuguese"
+                            "zh" -> "Chinese"
+                            "ja" -> "Japanese"
+                            else -> "English"
+                        })
+                    },
+                    leadingContent = { Icon(Icons.Default.Language, null) },
+                    trailingContent = { Icon(Icons.Default.ChevronRight, null) }
+                )
+            }
+        }
+        
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                ListItem(
+                    headlineContent = { Text("Auto-Naming") },
+                    supportingContent = { Text("Suggest names from OCR text") },
+                    leadingContent = { Icon(Icons.Default.AutoAwesome, null) },
+                    trailingContent = {
+                        Switch(
+                            checked = autoNaming,
+                            onCheckedChange = { scope.launch { settingsManager.setAutoNaming(it) } }
+                        )
+                    }
+                )
+            }
+        }
+        
+        item {
+            Text(
+                text = "APPEARANCE",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+            )
+        }
+        
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    ListItem(
+                        headlineContent = { Text("Theme") },
+                        supportingContent = { Text("Choose light or dark mode") }
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        FilterChip(
+                            selected = theme == AppTheme.LIGHT,
+                            onClick = { scope.launch { settingsManager.setTheme(AppTheme.LIGHT) } },
+                            label = { Text("Light") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = theme == AppTheme.DARK,
+                            onClick = { scope.launch { settingsManager.setTheme(AppTheme.DARK) } },
+                            label = { Text("Dark") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
+                            selected = theme == AppTheme.SYSTEM,
+                            onClick = { scope.launch { settingsManager.setTheme(AppTheme.SYSTEM) } },
+                            label = { Text("System") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+        
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    ListItem(
+                        headlineContent = { Text("Sort Order") },
+                        supportingContent = { Text("Document list sorting") }
+                    )
+                    Column(
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        FilterChip(
+                            selected = sortOrder == SortOrder.NEWEST_FIRST,
+                            onClick = { scope.launch { settingsManager.setSortOrder(SortOrder.NEWEST_FIRST) } },
+                            label = { Text("Newest First") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        FilterChip(
+                            selected = sortOrder == SortOrder.OLDEST_FIRST,
+                            onClick = { scope.launch { settingsManager.setSortOrder(SortOrder.OLDEST_FIRST) } },
+                            label = { Text("Oldest First") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        FilterChip(
+                            selected = sortOrder == SortOrder.NAME_A_Z,
+                            onClick = { scope.launch { settingsManager.setSortOrder(SortOrder.NAME_A_Z) } },
+                            label = { Text("Name (A-Z)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        FilterChip(
+                            selected = sortOrder == SortOrder.NAME_Z_A,
+                            onClick = { scope.launch { settingsManager.setSortOrder(SortOrder.NAME_Z_A) } },
+                            label = { Text("Name (Z-A)") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        }
+        
+        item {
+            Text(
+                text = "ABOUT",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(top = 16.dp, bottom = 4.dp)
+            )
+        }
+        
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                ListItem(
+                    headlineContent = { Text("App Version") },
+                    supportingContent = { Text("1.0.0") },
+                    leadingContent = { Icon(Icons.Default.Info, null) }
+                )
+            }
+        }
+        
+        item {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                ListItem(
+                    headlineContent = { Text("Storage Usage") },
+                    supportingContent = { 
+                        val database = AppDatabase.getDatabase(context)
+                        val docCount by database.pdfDocumentDao().getAllDocuments().collectAsState(initial = emptyList())
+                        Text("${docCount.size} documents")
+                    },
+                    leadingContent = { Icon(Icons.Default.Storage, null) }
+                )
+            }
+        }
+    }
+    
+    if (showCategoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showCategoryDialog = false },
+            title = { Text("Default Category") },
+            text = {
+                OutlinedTextField(
+                    value = tempCategory,
+                    onValueChange = { tempCategory = it },
+                    label = { Text("Category name") },
+                    placeholder = { Text("e.g., Work, Personal, Receipts") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        settingsManager.setDefaultCategory(tempCategory)
+                        showCategoryDialog = false
+                    }
+                }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCategoryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+        LaunchedEffect(Unit) {
+            tempCategory = defaultCategory
+        }
+    }
+    
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = { Text("OCR Language") },
+            text = {
+                Column {
+                    listOf(
+                        "en" to "English",
+                        "es" to "Spanish",
+                        "fr" to "French",
+                        "de" to "German",
+                        "it" to "Italian",
+                        "pt" to "Portuguese",
+                        "zh" to "Chinese",
+                        "ja" to "Japanese"
+                    ).forEach { (code, name) ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    scope.launch {
+                                        settingsManager.setOcrLanguage(code)
+                                        showLanguageDialog = false
+                                    }
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            RadioButton(
+                                selected = ocrLanguage == code,
+                                onClick = {
+                                    scope.launch {
+                                        settingsManager.setOcrLanguage(code)
+                                        showLanguageDialog = false
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(name)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLanguageDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+}
+
 @Composable
 fun OnboardingScreen(onSelectFolder: () -> Unit, onSkip: () -> Unit) {
     Box(
@@ -1249,5 +1659,5 @@ fun OnboardingScreen(onSelectFolder: () -> Unit, onSkip: () -> Unit) {
 }
 
 enum class Screen {
-    Home, Scan, Tools
+    Home, Scan, Tools, Settings
 }
