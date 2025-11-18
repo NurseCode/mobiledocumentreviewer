@@ -39,7 +39,9 @@ fun CameraScreen(
     var previewView by remember { mutableStateOf<PreviewView?>(null) }
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
     var isCapturing by remember { mutableStateOf(false) }
+    var showCrop by remember { mutableStateOf(false) }
     var capturedImageFile by remember { mutableStateOf<File?>(null) }
+    var finalImageFile by remember { mutableStateOf<File?>(null) }
     var showPreview by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
@@ -68,9 +70,24 @@ fun CameraScreen(
         }
     }
     
-    Box(modifier = Modifier.fillMaxSize()) {
-        if (!showPreview) {
-            // Camera preview
+    if (showCrop && capturedImageFile != null) {
+        CropScreen(
+            imageFile = capturedImageFile!!,
+            onCropComplete = { croppedFile ->
+                // Return to preview with cropped image
+                finalImageFile = croppedFile
+                showCrop = false
+                showPreview = true
+            },
+            onCancel = {
+                showCrop = false
+                showPreview = true
+            }
+        )
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
+            if (!showPreview) {
+                // Camera preview
             AndroidView(
                 factory = { ctx ->
                     PreviewView(ctx).also {
@@ -126,6 +143,7 @@ fun CameraScreen(
                                     val result = CameraUtils.captureImage(context, imageCapture!!, photoFile)
                                     result.onSuccess {
                                         capturedImageFile = it
+                                        finalImageFile = it
                                         showPreview = true
                                     }.onFailure {
                                         // Handle error
@@ -169,8 +187,8 @@ fun CameraScreen(
                 }
             }
         } else {
-            // Image preview
-            capturedImageFile?.let { file ->
+            // Image preview - show the final (possibly cropped) image
+            finalImageFile?.let { file ->
                 val bitmap = remember(file) {
                     BitmapFactory.decodeFile(file.absolutePath)
                 }
@@ -206,7 +224,10 @@ fun CameraScreen(
                         OutlinedButton(
                             onClick = {
                                 showPreview = false
+                                capturedImageFile?.delete()
+                                finalImageFile?.delete()
                                 capturedImageFile = null
+                                finalImageFile = null
                             },
                             colors = ButtonDefaults.outlinedButtonColors(
                                 contentColor = Color.White
@@ -215,6 +236,21 @@ fun CameraScreen(
                             Icon(Icons.Default.Refresh, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Retake")
+                        }
+                        
+                        // Crop
+                        OutlinedButton(
+                            onClick = {
+                                showPreview = false
+                                showCrop = true
+                            },
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Icon(Icons.Default.Crop, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Crop")
                         }
                         
                         // Use image
@@ -235,20 +271,21 @@ fun CameraScreen(
             }
         }
         
-        // Top bar
-        if (!showPreview) {
-            TopAppBar(
-                title = { Text("Scan Document", color = Color.White) },
-                navigationIcon = {
-                    IconButton(onClick = onClose) {
-                        Icon(Icons.Default.Close, "Close", tint = Color.White)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black.copy(alpha = 0.5f)
-                ),
-                modifier = Modifier.align(Alignment.TopCenter)
-            )
+            // Top bar
+            if (!showPreview) {
+                TopAppBar(
+                    title = { Text("Scan Document", color = Color.White) },
+                    navigationIcon = {
+                        IconButton(onClick = onClose) {
+                            Icon(Icons.Default.Close, "Close", tint = Color.White)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Black.copy(alpha = 0.5f)
+                    ),
+                    modifier = Modifier.align(Alignment.TopCenter)
+                )
+            }
         }
     }
 }

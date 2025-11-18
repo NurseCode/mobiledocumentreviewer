@@ -200,6 +200,7 @@ fun dynamicColorScheme(): ColorScheme {
 @Composable
 fun MainScreen(viewModel: PdfViewModel) {
     var selectedScreen by remember { mutableStateOf(Screen.Home) }
+    var viewingDocument by remember { mutableStateOf<StoredPdfDocument?>(null) }
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp > 600
     
@@ -263,28 +264,44 @@ fun MainScreen(viewModel: PdfViewModel) {
                     )
                 }
                 Box(modifier = Modifier.weight(1f)) {
-                    ScreenContent(selectedScreen, viewModel)
+                    if (viewingDocument != null) {
+                        PdfViewerScreen(
+                            pdfPath = viewingDocument!!.filePath,
+                            fileName = viewingDocument!!.fileName,
+                            onBack = { viewingDocument = null }
+                        )
+                    } else {
+                        ScreenContent(selectedScreen, viewModel, onViewDocument = { viewingDocument = it })
+                    }
                 }
             }
         } else {
             Box(modifier = Modifier.padding(padding)) {
-                ScreenContent(selectedScreen, viewModel)
+                if (viewingDocument != null) {
+                    PdfViewerScreen(
+                        pdfPath = viewingDocument!!.filePath,
+                        fileName = viewingDocument!!.fileName,
+                        onBack = { viewingDocument = null }
+                    )
+                } else {
+                    ScreenContent(selectedScreen, viewModel, onViewDocument = { viewingDocument = it })
+                }
             }
         }
     }
 }
 
 @Composable
-fun ScreenContent(screen: Screen, viewModel: PdfViewModel) {
+fun ScreenContent(screen: Screen, viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> Unit = {}) {
     when (screen) {
-        Screen.Home -> HomeScreen(viewModel)
+        Screen.Home -> HomeScreen(viewModel, onViewDocument)
         Screen.Scan -> ScanScreen(viewModel)
         Screen.Tools -> ToolsScreen(viewModel)
     }
 }
 
 @Composable
-fun HomeScreen(viewModel: PdfViewModel) {
+fun HomeScreen(viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> Unit = {}) {
     val documents by viewModel.allDocuments.collectAsState(initial = emptyList())
     
     Column(
@@ -328,7 +345,7 @@ fun HomeScreen(viewModel: PdfViewModel) {
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(documents) { doc ->
-                    DocumentCard(doc, viewModel)
+                    DocumentCard(doc, viewModel, onClick = { onViewDocument(doc) })
                 }
             }
         }
@@ -337,10 +354,10 @@ fun HomeScreen(viewModel: PdfViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel) {
+fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: () -> Unit = {}) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = { }
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
