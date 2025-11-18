@@ -813,8 +813,8 @@ fun ScanScreen(viewModel: PdfViewModel) {
                             val suggestedName = if (ocrResults.isNotEmpty()) {
                                 val docType = CameraUtils.detectDocumentType(ocrResults[0].fullText)
                                 when (docType) {
-                                    DocumentType.RECEIPT -> "Receipt_$timestamp"
-                                    DocumentType.DOCUMENT -> "Document_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.RECEIPT -> "Receipt_$timestamp"
+                                    com.pdfcomposer.app.DocumentType.DOCUMENT -> "Document_$timestamp"
                                     else -> "Scan_$timestamp"
                                 }
                             } else {
@@ -952,8 +952,9 @@ fun ScanScreen(viewModel: PdfViewModel) {
     
     // Document naming dialog
     if (showNamingDialog && pendingSaveData != null) {
+        val saveData = pendingSaveData!!
         DocumentNamingDialog(
-            suggestedName = pendingSaveData.suggestedName,
+            suggestedName = saveData.suggestedName,
             onSave = { fileName, category ->
                 scope.launch {
                     isProcessing = true
@@ -969,26 +970,26 @@ fun ScanScreen(viewModel: PdfViewModel) {
                             val pdfUri = StorageUtils.createPdfFile(context, folderUri, finalFileName)
                             
                             if (pdfUri != null) {
-                                StorageUtils.copyPdfToSaf(context, pendingSaveData.pdfFile, pdfUri)
+                                StorageUtils.copyPdfToSaf(context, saveData.pdfFile, pdfUri)
                                 pdfUri.toString()
                             } else {
                                 // Fallback: use app files directory
                                 val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), finalFileName)
-                                pendingSaveData.pdfFile.copyTo(appFile, overwrite = true)
+                                saveData.pdfFile.copyTo(appFile, overwrite = true)
                                 appFile.absolutePath
                             }
                         } else {
                             // No SAF folder selected - use app files directory
                             val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), finalFileName)
-                            pendingSaveData.pdfFile.copyTo(appFile, overwrite = true)
+                            saveData.pdfFile.copyTo(appFile, overwrite = true)
                             appFile.absolutePath
                         }
                         
                         // Add to database
-                        viewModel.addDocument(finalFileName, savedUri, pendingSaveData.pageCount, category)
+                        viewModel.addDocument(finalFileName, savedUri, saveData.pageCount, category)
                         
                         // Clean up temp PDF
-                        pendingSaveData.pdfFile.delete()
+                        saveData.pdfFile.delete()
                         
                         showNamingDialog = false
                         pendingSaveData = null
