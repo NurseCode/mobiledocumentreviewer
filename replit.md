@@ -34,11 +34,20 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 - ✅ **Three-dot overflow menu (rename/share/delete)**
 - ✅ **Category filtering and search UI**
 - ✅ **Settings screen**
+- ✅ **Advanced crop tool with edge handles**
 - ⏳ Receipt JSON extraction (pending)
 - ⏳ Digital signatures (pending)
+- ⏳ Pinch-to-zoom/pan in crop tool (pending - requires custom gesture implementation)
 
 ## Recent Changes
 **Date**: November 18, 2025
+- ✅ **Completely rebuilt advanced crop tool**
+  - Fixed corner dragging for true diagonal movement (both X and Y together)
+  - Added edge handles (blue circles) in middle of each side for precise edge movement
+  - Implemented distance-based handle detection with corner priority
+  - Added auto-edge detection button using brightness analysis
+  - Fixed camera rotation via EXIF normalization (physical bitmap rotation)
+  - Applied professional blue/grey color scheme throughout app
 - ✅ **Implemented SAF persistent storage architecture**
   - One-time onboarding flow for directory selection
   - Documents survive app uninstall and cache clearing

@@ -50,20 +50,22 @@ fun CropScreen(
     var isSaving by remember { mutableStateOf(false) }
     
     LaunchedEffect(imageFile) {
-        withContext(Dispatchers.IO) {
-            val bitmap = BitmapFactory.decodeFile(imageFile.absolutePath)
-            imageBitmap = bitmap?.asImageBitmap()
-            
-            // Initialize crop rect to cover most of the image (with 5% margin)
-            imageBitmap?.let {
-                val margin = 0.05f
-                cropRect = Rect(
-                    left = it.width * margin,
-                    top = it.height * margin,
-                    right = it.width * (1 - margin),
-                    bottom = it.height * (1 - margin)
-                )
-            }
+        val loadedBitmap = withContext(Dispatchers.IO) {
+            BitmapFactory.decodeFile(imageFile.absolutePath)
+        }
+        
+        // Update state on main thread
+        imageBitmap = loadedBitmap?.asImageBitmap()
+        
+        // Initialize crop rect to cover most of the image (with 5% margin)
+        imageBitmap?.let {
+            val margin = 0.05f
+            cropRect = Rect(
+                left = it.width * margin,
+                top = it.height * margin,
+                right = it.width * (1 - margin),
+                bottom = it.height * (1 - margin)
+            )
         }
     }
     
