@@ -5,6 +5,10 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -18,9 +22,14 @@ import androidx.compose.material3.*
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerInputChange
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -28,6 +37,105 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+
+@Composable
+fun ZoomablePdfPage(
+    bitmap: Bitmap,
+    pageNumber: Int,
+    onCropClick: (() -> Unit)? = null
+) {
+    // Use rememberSaveable with unique keys to preserve zoom state per page
+    var scale by rememberSaveable(key = "zoom_scale_$pageNumber") { mutableFloatStateOf(1f) }
+    var offsetX by rememberSaveable(key = "zoom_offset_x_$pageNumber") { mutableFloatStateOf(0f) }
+    var offsetY by rememberSaveable(key = "zoom_offset_y_$pageNumber") { mutableFloatStateOf(0f) }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Box(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Page $pageNumber",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .graphicsLayer(
+                            scaleX = scale,
+                            scaleY = scale,
+                            translationX = offsetX,
+                            translationY = offsetY
+                        )
+                        .pointerInput(Unit) {
+                            // Custom gesture handling: only consume when 2+ fingers detected
+                            awaitEachGesture {
+                                awaitFirstDown(requireUnconsumed = false)
+                                
+                                do {
+                                    val event = awaitPointerEvent()
+                                    val pointerCount = event.changes.count { it.pressed }
+                                    
+                                    // Only handle transform gestures with 2+ fingers
+                                    if (pointerCount >= 2) {
+                                        val zoom = event.calculateZoom()
+                                        val pan = event.calculatePan()
+                                        
+                                        scale = (scale * zoom).coerceIn(1f, 5f)
+                                        
+                                        // Calculate max offset based on scaled size
+                                        val maxX = (size.width * (scale - 1f)) / 2f
+                                        val maxY = (size.height * (scale - 1f)) / 2f
+                                        
+                                        offsetX = (offsetX + pan.x).coerceIn(-maxX, maxX)
+                                        offsetY = (offsetY + pan.y).coerceIn(-maxY, maxY)
+                                        
+                                        // Reset offset if zoomed all the way out
+                                        if (scale == 1f) {
+                                            offsetX = 0f
+                                            offsetY = 0f
+                                        }
+                                        
+                                        // Consume the event to prevent parent scrolling while zooming
+                                        event.changes.forEach { it.consume() }
+                                    }
+                                    // else: don't consume, let parent LazyColumn handle scrolling
+                                } while (event.changes.any { it.pressed })
+                            }
+                        }
+                )
+            }
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Page $pageNumber",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                if (onCropClick != null) {
+                    OutlinedButton(
+                        onClick = onCropClick
+                    ) {
+                        Icon(
+                            Icons.Default.Crop,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Crop")
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -312,40 +420,13 @@ fun PdfViewerScreen(
                         verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         items(pageBitmaps.withIndex().toList()) { (index, bitmap) ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column {
-                                    Image(
-                                        bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = "Page ${index + 1}",
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-                                    
-                                    if (onCropPage != null) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(8.dp),
-                                            horizontalArrangement = Arrangement.End
-                                        ) {
-                                            OutlinedButton(
-                                                onClick = { onCropPage(index) }
-                                            ) {
-                                                Icon(Icons.Default.Crop, "Crop")
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text("Crop Page ${index + 1}")
-                                            }
-                                        }
-                                    }
-                                    
-                                    Text(
-                                        text = "Page ${index + 1} of ${pageBitmaps.size}",
-                                        modifier = Modifier.padding(8.dp),
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
-                                }
-                            }
+                            ZoomablePdfPage(
+                                bitmap = bitmap,
+                                pageNumber = index + 1,
+                                onCropClick = if (onCropPage != null) {
+                                    { onCropPage(index) }
+                                } else null
+                            )
                         }
                     }
                 }
