@@ -1,6 +1,8 @@
 package com.pdfcomposer.app
 
+import android.app.Activity
 import android.graphics.BitmapFactory
+import android.view.WindowManager
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -52,8 +54,11 @@ fun CameraScreen(
         
         val preview = Preview.Builder().build()
         
-        // Configure ImageCapture with rotation from PreviewView display
-        val rotation = previewView!!.display?.rotation ?: android.view.Surface.ROTATION_0
+        // Get rotation from WindowManager for accurate device orientation
+        val windowManager = (context as? Activity)?.windowManager
+            ?: context.getSystemService(android.content.Context.WINDOW_SERVICE) as WindowManager
+        val rotation = windowManager.defaultDisplay.rotation
+        
         val imageCaptureBuilder = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .setTargetRotation(rotation)
