@@ -126,6 +126,29 @@ object StorageUtils {
     }
     
     /**
+     * Copy URI (content:// or file://) to a temporary file
+     * Used for tools that need to process selected PDFs
+     */
+    suspend fun copyUriToTempFile(
+        context: Context,
+        uri: Uri
+    ): File? = withContext(Dispatchers.IO) {
+        try {
+            val fileName = getFileName(context, uri)
+            val tempFile = File(context.cacheDir, "temp_${System.currentTimeMillis()}_$fileName")
+            
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                tempFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            tempFile
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    /**
      * Get file name from content URI
      */
     fun getFileName(context: Context, uri: Uri): String {

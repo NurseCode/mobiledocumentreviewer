@@ -9,6 +9,7 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -1124,10 +1125,102 @@ fun ScanScreen(viewModel: PdfViewModel) {
 
 @Composable
 fun ToolsScreen(viewModel: PdfViewModel) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var selectedPdfUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedPdfFile by remember { mutableStateOf<File?>(null) }
+    var showSplitDialog by remember { mutableStateOf(false) }
+    var showCompressDialog by remember { mutableStateOf(false) }
+    var showOcrDialog by remember { mutableStateOf(false) }
+    
+    val mergePdfPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            scope.launch {
+                val pdfFiles = mutableListOf<File>()
+                try {
+                    uris.forEach { uri ->
+                        StorageUtils.copyUriToTempFile(context, uri)?.let { pdfFiles.add(it) }
+                    }
+                    
+                    if (pdfFiles.size >= 2) {
+                        val outputFile = File(context.cacheDir, "merged_${System.currentTimeMillis()}.pdf")
+                        val result = PdfUtils.mergePdfs(pdfFiles, outputFile)
+                        result.onSuccess { merged ->
+                            viewModel.addDocument(
+                                merged.name,
+                                merged.absolutePath,
+                                merged.countPages(),
+                                ""
+                            )
+                            Toast.makeText(context, "PDFs merged successfully!", Toast.LENGTH_SHORT).show()
+                        }.onFailure {
+                            Toast.makeText(context, "Merge failed: ${it.message}", Toast.LENGTH_LONG).show()
+                        }
+                    } else {
+                        Toast.makeText(context, "Please select at least 2 PDFs", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                } finally {
+                    // Always cleanup temp files
+                    pdfFiles.forEach { it.delete() }
+                }
+            }
+        }
+    }
+    
+    val splitPdfPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val tempFile = StorageUtils.copyUriToTempFile(context, uri)
+                if (tempFile != null) {
+                    selectedPdfFile = tempFile
+                    selectedPdfUri = uri
+                    showSplitDialog = true
+                }
+            }
+        }
+    }
+    
+    val compressPdfPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val tempFile = StorageUtils.copyUriToTempFile(context, uri)
+                if (tempFile != null) {
+                    selectedPdfFile = tempFile
+                    selectedPdfUri = uri
+                    showCompressDialog = true
+                }
+            }
+        }
+    }
+    
+    val ocrPdfPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val tempFile = StorageUtils.copyUriToTempFile(context, uri)
+                if (tempFile != null) {
+                    selectedPdfFile = tempFile
+                    selectedPdfUri = uri
+                    showOcrDialog = true
+                }
+            }
+        }
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
+            .verticalScroll(rememberScrollState())
     ) {
         Text(
             text = "PDF Tools",
@@ -1138,7 +1231,8 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         ToolCard(
             title = "Merge PDFs",
             description = "Combine multiple PDF files into one",
-            icon = Icons.Default.MergeType
+            icon = Icons.Default.MergeType,
+            onClick = { mergePdfPicker.launch(arrayOf("application/pdf")) }
         )
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -1146,7 +1240,8 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         ToolCard(
             title = "Split PDF",
             description = "Extract pages or split into multiple files",
-            icon = Icons.Default.CallSplit
+            icon = Icons.Default.CallSplit,
+            onClick = { splitPdfPicker.launch(arrayOf("application/pdf")) }
         )
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -1154,7 +1249,8 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         ToolCard(
             title = "Compress PDF",
             description = "Reduce file size while maintaining quality",
-            icon = Icons.Default.Compress
+            icon = Icons.Default.Compress,
+            onClick = { compressPdfPicker.launch(arrayOf("application/pdf")) }
         )
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -1162,7 +1258,8 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         ToolCard(
             title = "OCR Text Extract",
             description = "Extract text from scanned documents",
-            icon = Icons.Default.TextFields
+            icon = Icons.Default.TextFields,
+            onClick = { ocrPdfPicker.launch(arrayOf("application/pdf")) }
         )
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -1170,7 +1267,8 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         ToolCard(
             title = "Annotate & Draw",
             description = "Add notes, highlights, and drawings",
-            icon = Icons.Default.Draw
+            icon = Icons.Default.Draw,
+            onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() }
         )
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -1178,17 +1276,18 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         ToolCard(
             title = "Sign Document",
             description = "Draw signature and embed in PDF",
-            icon = Icons.Default.Edit
+            icon = Icons.Default.Edit,
+            onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() }
         )
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ToolCard(title: String, description: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+fun ToolCard(title: String, description: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit = {}) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        onClick = { }
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
@@ -1759,6 +1858,17 @@ fun OnboardingScreen(onSelectFolder: () -> Unit, onSkip: () -> Unit) {
         TextButton(onClick = onSkip) {
             Text("Skip (use temporary storage)")
         }
+    }
+}
+
+fun File.countPages(): Int {
+    return try {
+        val renderer = PdfRenderer(ParcelFileDescriptor.open(this, ParcelFileDescriptor.MODE_READ_ONLY))
+        val pageCount = renderer.pageCount
+        renderer.close()
+        pageCount
+    } catch (e: Exception) {
+        1
     }
 }
 
