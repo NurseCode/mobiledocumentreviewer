@@ -222,10 +222,14 @@ fun dynamicColorScheme(): ColorScheme {
     return lightColorScheme(
         primary = Color(0xFF1565C0),           // Professional dark blue
         onPrimary = Color.White,
-        primaryContainer = Color(0xFFBBDEFB),  // Light blue container
+        primaryContainer = Color(0xFFE3F2FD),  // Very light blue container (not lilac)
         onPrimaryContainer = Color(0xFF0D47A1), // Darker blue for text
         secondary = Color(0xFF455A64),         // Blue-grey
         onSecondary = Color.White,
+        secondaryContainer = Color(0xFFECEFF1), // Light blue-grey container (not lilac)
+        onSecondaryContainer = Color(0xFF263238),
+        surfaceVariant = Color(0xFFE0E0E0),    // Light grey variant
+        onSurfaceVariant = Color(0xFF424242),
         background = Color(0xFFFAFAFA),        // Light grey background
         surface = Color.White,
         onSurface = Color(0xFF212121)          // Dark text
@@ -1341,19 +1345,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = imageQuality == ImageQuality.HIGH,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.HIGH) } },
-                            label = { Text("High", maxLines = 1) },
+                            label = { Text("High", style = MaterialTheme.typography.bodyMedium) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.MEDIUM,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.MEDIUM) } },
-                            label = { Text("Medium", maxLines = 1) },
+                            label = { Text("Medium", style = MaterialTheme.typography.bodyMedium) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.LOW,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.LOW) } },
-                            label = { Text("Low", maxLines = 1) },
+                            label = { Text("Low", style = MaterialTheme.typography.bodyMedium) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1428,19 +1432,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = theme == AppTheme.LIGHT,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.LIGHT) } },
-                            label = { Text("Light", maxLines = 1) },
+                            label = { Text("Light", style = MaterialTheme.typography.bodyMedium) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.DARK,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.DARK) } },
-                            label = { Text("Dark", maxLines = 1) },
+                            label = { Text("Dark", style = MaterialTheme.typography.bodyMedium) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.SYSTEM,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.SYSTEM) } },
-                            label = { Text("System", maxLines = 1) },
+                            label = { Text("System", style = MaterialTheme.typography.bodyMedium) },
                             modifier = Modifier.weight(1f)
                         )
                     }

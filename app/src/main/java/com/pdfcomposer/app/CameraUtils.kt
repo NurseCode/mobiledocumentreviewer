@@ -56,6 +56,58 @@ object CameraUtils {
     }
     
     /**
+     * Normalize EXIF orientation by physically rotating the image
+     * This ensures the image displays correctly in all apps/viewers
+     * Call this immediately after capture before showing preview
+     */
+    suspend fun normalizeImageOrientation(file: File): Result<File> = withContext(Dispatchers.IO) {
+        try {
+            val exif = ExifInterface(file.absolutePath)
+            val orientation = exif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
+            
+            // Only process if rotation is needed
+            if (orientation == ExifInterface.ORIENTATION_NORMAL || orientation == ExifInterface.ORIENTATION_UNDEFINED) {
+                return@withContext Result.success(file)
+            }
+            
+            val rotationDegrees = when (orientation) {
+                ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                else -> 0f
+            }
+            
+            if (rotationDegrees == 0f) {
+                return@withContext Result.success(file)
+            }
+            
+            // Load and rotate bitmap
+            var bitmap = BitmapFactory.decodeFile(file.absolutePath)
+            val matrix = Matrix().apply {
+                postRotate(rotationDegrees)
+            }
+            bitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            
+            // Save back to same file
+            FileOutputStream(file).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 95, out)
+            }
+            
+            // Reset EXIF orientation to normal
+            exif.setAttribute(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL.toString())
+            exif.saveAttributes()
+            
+            bitmap.recycle()
+            Result.success(file)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    /**
      * Optimize image for PDF conversion
      * - Resize to max 1920x1920 for file size
      * - Compress to balance quality and size

@@ -172,15 +172,30 @@ fun CameraScreen(
                                         "IMG_$timestamp.jpg"
                                     )
                                     
-                                    val result = CameraUtils.captureImage(context, imageCapture!!, photoFile)
-                                    result.onSuccess {
-                                        capturedImageFile = it
-                                        finalImageFile = it
-                                        showPreview = true
-                                    }.onFailure {
-                                        // Handle error
-                                        it.printStackTrace()
+                                    // Capture image
+                                    val captureResult = CameraUtils.captureImage(context, imageCapture!!, photoFile)
+                                    
+                                    if (captureResult.isSuccess) {
+                                        val capturedFile = captureResult.getOrNull()
+                                        if (capturedFile != null) {
+                                            // Normalize EXIF orientation immediately to fix rotation issues
+                                            val normalizeResult = CameraUtils.normalizeImageOrientation(capturedFile)
+                                            
+                                            if (normalizeResult.isSuccess) {
+                                                val normalizedFile = normalizeResult.getOrNull()
+                                                if (normalizedFile != null) {
+                                                    capturedImageFile = normalizedFile
+                                                    finalImageFile = normalizedFile
+                                                    showPreview = true
+                                                }
+                                            } else {
+                                                normalizeResult.exceptionOrNull()?.printStackTrace()
+                                            }
+                                        }
+                                    } else {
+                                        captureResult.exceptionOrNull()?.printStackTrace()
                                     }
+                                    
                                     isCapturing = false
                                 }
                             }
