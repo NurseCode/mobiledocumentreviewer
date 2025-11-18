@@ -41,10 +41,13 @@ A native Android app for offline PDF creation, scanning, OCR, and manipulation. 
 
 ## Recent Changes
 **Date**: November 18, 2025
-- ✅ **Fixed crop tool and UI text issues**
+- ✅ **Fixed all user-reported UI and crop tool issues**
+  - **Navigation bar**: Applied labelSmall to ALL tabs (Home, Scan, Tools, Settings) - no more "Setti..." truncation
+  - **Settings FilterChips**: Applied bodySmall to image quality and theme chips - shows full "Medium" and "System" text
+  - **Crop tool responsiveness**: Increased handle detection radius (corners: 60f→100f, edges: 40f→80f) for easier touch on phones
+  - **Rotation preservation**: Implemented RectSaver with rememberSaveable to preserve crop work when device rotates
+  - **Gallery import crop flow**: Added CropScreen before PDF conversion for gallery-imported images
   - Fixed crop tool gesture detection (moved from Canvas to Box wrapper)
-  - Fixed "Settings" text cutoff in bottom navigation bar
-  - Fixed FilterChip text wrapping in Settings screen ("Medium", "System")
 - ✅ **Added pinch-to-zoom to PDF viewer**
   - Two-finger pinch to zoom (1x to 5x magnification)
   - Pan around zoomed pages with two fingers
