@@ -322,7 +322,14 @@ fun MainScreen(viewModel: PdfViewModel) {
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, "Settings") },
-                        label = { Text("Settings", maxLines = 1) },
+                        label = { 
+                            Text(
+                                "Settings",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelSmall
+                            ) 
+                        },
                         selected = selectedScreen == Screen.Settings,
                         onClick = { selectedScreen = Screen.Settings }
                     )
@@ -1345,19 +1352,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = imageQuality == ImageQuality.HIGH,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.HIGH) } },
-                            label = { Text("High", style = MaterialTheme.typography.bodyMedium) },
+                            label = { Text("High", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.MEDIUM,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.MEDIUM) } },
-                            label = { Text("Medium", style = MaterialTheme.typography.bodyMedium) },
+                            label = { Text("Medium", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.LOW,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.LOW) } },
-                            label = { Text("Low", style = MaterialTheme.typography.bodyMedium) },
+                            label = { Text("Low", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1432,19 +1439,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = theme == AppTheme.LIGHT,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.LIGHT) } },
-                            label = { Text("Light", style = MaterialTheme.typography.bodyMedium) },
+                            label = { Text("Light", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.DARK,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.DARK) } },
-                            label = { Text("Dark", style = MaterialTheme.typography.bodyMedium) },
+                            label = { Text("Dark", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.SYSTEM,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.SYSTEM) } },
-                            label = { Text("System", style = MaterialTheme.typography.bodyMedium) },
+                            label = { Text("System", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                     }

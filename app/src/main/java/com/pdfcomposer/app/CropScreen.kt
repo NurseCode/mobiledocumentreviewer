@@ -199,7 +199,7 @@ fun CropView(
         val offsetX = (maxWidth - displayWidth) / 2 + offset.x
         val offsetY = (maxHeight - displayHeight) / 2 + offset.y
         
-        Canvas(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .pointerInput(Unit) {
@@ -239,6 +239,7 @@ fun CropView(
                     )
                 }
         ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
             // Draw the image
             drawImage(
                 image = image,
@@ -331,6 +332,7 @@ fun CropView(
                 radius = edgeSize / 2,
                 center = Offset(cropRight, centerY)
             )
+            }
         }
     }
 }
