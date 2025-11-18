@@ -220,15 +220,15 @@ fun PdfComposerTheme(content: @Composable () -> Unit) {
 @Composable
 fun dynamicColorScheme(): ColorScheme {
     return lightColorScheme(
-        primary = Color(0xFF6750A4),
+        primary = Color(0xFF1565C0),           // Professional dark blue
         onPrimary = Color.White,
-        primaryContainer = Color(0xFFEADDFF),
-        onPrimaryContainer = Color(0xFF21005D),
-        secondary = Color(0xFF625B71),
+        primaryContainer = Color(0xFFBBDEFB),  // Light blue container
+        onPrimaryContainer = Color(0xFF0D47A1), // Darker blue for text
+        secondary = Color(0xFF455A64),         // Blue-grey
         onSecondary = Color.White,
-        background = Color(0xFFFFFBFE),
-        surface = Color(0xFFFFFBFE),
-        onSurface = Color(0xFF1C1B1F)
+        background = Color(0xFFFAFAFA),        // Light grey background
+        surface = Color.White,
+        onSurface = Color(0xFF212121)          // Dark text
     )
 }
 
@@ -300,25 +300,25 @@ fun MainScreen(viewModel: PdfViewModel) {
                 NavigationBar {
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Home, "Home") },
-                        label = { Text("Home") },
+                        label = { Text("Home", maxLines = 1) },
                         selected = selectedScreen == Screen.Home,
                         onClick = { selectedScreen = Screen.Home }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.CameraAlt, "Scan") },
-                        label = { Text("Scan") },
+                        label = { Text("Scan", maxLines = 1) },
                         selected = selectedScreen == Screen.Scan,
                         onClick = { selectedScreen = Screen.Scan }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Edit, "Tools") },
-                        label = { Text("Tools") },
+                        label = { Text("Tools", maxLines = 1) },
                         selected = selectedScreen == Screen.Tools,
                         onClick = { selectedScreen = Screen.Tools }
                     )
                     NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, "Settings") },
-                        label = { Text("Settings") },
+                        label = { Text("Settings", maxLines = 1) },
                         selected = selectedScreen == Screen.Settings,
                         onClick = { selectedScreen = Screen.Settings }
                     )
@@ -1341,19 +1341,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = imageQuality == ImageQuality.HIGH,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.HIGH) } },
-                            label = { Text("High") },
+                            label = { Text("High", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.MEDIUM,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.MEDIUM) } },
-                            label = { Text("Medium") },
+                            label = { Text("Medium", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = imageQuality == ImageQuality.LOW,
                             onClick = { scope.launch { settingsManager.setImageQuality(ImageQuality.LOW) } },
-                            label = { Text("Low") },
+                            label = { Text("Low", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1428,19 +1428,19 @@ fun SettingsScreen() {
                         FilterChip(
                             selected = theme == AppTheme.LIGHT,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.LIGHT) } },
-                            label = { Text("Light") },
+                            label = { Text("Light", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.DARK,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.DARK) } },
-                            label = { Text("Dark") },
+                            label = { Text("Dark", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                         FilterChip(
                             selected = theme == AppTheme.SYSTEM,
                             onClick = { scope.launch { settingsManager.setTheme(AppTheme.SYSTEM) } },
-                            label = { Text("System") },
+                            label = { Text("System", maxLines = 1) },
                             modifier = Modifier.weight(1f)
                         )
                     }
