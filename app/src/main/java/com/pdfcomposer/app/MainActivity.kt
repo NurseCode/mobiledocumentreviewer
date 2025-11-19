@@ -610,7 +610,7 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        if (uri != null) {
+        if (uri != null && showMergeDialog) {
             scope.launch {
                 val tempFile = StorageUtils.copyUriToTempFile(context, uri)
                 if (tempFile != null) {
@@ -737,16 +737,31 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         onClick = {
                             showMenu = false
                             scope.launch {
-                                val file = if (document.filePath.startsWith("content://")) {
-                                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
-                                } else {
-                                    File(document.filePath)
-                                }
-                                if (file != null && file.exists()) {
-                                    selectedPdfFile = file
-                                    showSplitDialog = true
-                                } else {
-                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                var fileToCleanup: File? = null
+                                try {
+                                    val file = if (document.filePath.startsWith("content://")) {
+                                        StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                                    } else {
+                                        val sourceFile = File(document.filePath)
+                                        if (sourceFile.exists()) {
+                                            val tempFile = File(context.cacheDir, "temp_split_${System.currentTimeMillis()}.pdf")
+                                            sourceFile.copyTo(tempFile, overwrite = true)
+                                            tempFile
+                                        } else {
+                                            null
+                                        }
+                                    }
+                                    if (file != null && file.exists()) {
+                                        fileToCleanup = file
+                                        selectedPdfFile = file
+                                        showSplitDialog = true
+                                        fileToCleanup = null
+                                    } else {
+                                        Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    fileToCleanup?.delete()
+                                    Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
@@ -758,16 +773,31 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         onClick = {
                             showMenu = false
                             scope.launch {
-                                val file = if (document.filePath.startsWith("content://")) {
-                                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
-                                } else {
-                                    File(document.filePath)
-                                }
-                                if (file != null && file.exists()) {
-                                    selectedPdfFile = file
-                                    showCompressDialog = true
-                                } else {
-                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                var fileToCleanup: File? = null
+                                try {
+                                    val file = if (document.filePath.startsWith("content://")) {
+                                        StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                                    } else {
+                                        val sourceFile = File(document.filePath)
+                                        if (sourceFile.exists()) {
+                                            val tempFile = File(context.cacheDir, "temp_compress_${System.currentTimeMillis()}.pdf")
+                                            sourceFile.copyTo(tempFile, overwrite = true)
+                                            tempFile
+                                        } else {
+                                            null
+                                        }
+                                    }
+                                    if (file != null && file.exists()) {
+                                        fileToCleanup = file
+                                        selectedPdfFile = file
+                                        showCompressDialog = true
+                                        fileToCleanup = null
+                                    } else {
+                                        Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    fileToCleanup?.delete()
+                                    Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
@@ -779,16 +809,31 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         onClick = {
                             showMenu = false
                             scope.launch {
-                                val file = if (document.filePath.startsWith("content://")) {
-                                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
-                                } else {
-                                    File(document.filePath)
-                                }
-                                if (file != null && file.exists()) {
-                                    selectedPdfFile = file
-                                    showOcrDialog = true
-                                } else {
-                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                var fileToCleanup: File? = null
+                                try {
+                                    val file = if (document.filePath.startsWith("content://")) {
+                                        StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                                    } else {
+                                        val sourceFile = File(document.filePath)
+                                        if (sourceFile.exists()) {
+                                            val tempFile = File(context.cacheDir, "temp_ocr_${System.currentTimeMillis()}.pdf")
+                                            sourceFile.copyTo(tempFile, overwrite = true)
+                                            tempFile
+                                        } else {
+                                            null
+                                        }
+                                    }
+                                    if (file != null && file.exists()) {
+                                        fileToCleanup = file
+                                        selectedPdfFile = file
+                                        showOcrDialog = true
+                                        fileToCleanup = null
+                                    } else {
+                                        Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    fileToCleanup?.delete()
+                                    Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
@@ -800,17 +845,32 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         onClick = {
                             showMenu = false
                             scope.launch {
-                                val file = if (document.filePath.startsWith("content://")) {
-                                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
-                                } else {
-                                    File(document.filePath)
-                                }
-                                if (file != null && file.exists()) {
-                                    mergePdfList.clear()
-                                    mergePdfList.add(Pair(document.fileName, file))
-                                    showMergeDialog = true
-                                } else {
-                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                var fileToCleanup: File? = null
+                                try {
+                                    val file = if (document.filePath.startsWith("content://")) {
+                                        StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                                    } else {
+                                        val sourceFile = File(document.filePath)
+                                        if (sourceFile.exists()) {
+                                            val tempFile = File(context.cacheDir, "temp_merge_${System.currentTimeMillis()}.pdf")
+                                            sourceFile.copyTo(tempFile, overwrite = true)
+                                            tempFile
+                                        } else {
+                                            null
+                                        }
+                                    }
+                                    if (file != null && file.exists()) {
+                                        fileToCleanup = file
+                                        mergePdfList.clear()
+                                        mergePdfList.add(Pair(document.fileName, file))
+                                        showMergeDialog = true
+                                        fileToCleanup = null
+                                    } else {
+                                        Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    fileToCleanup?.delete()
+                                    Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                         }
@@ -1440,7 +1500,7 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        if (uri != null) {
+        if (uri != null && showMergeDialog) {
             scope.launch {
                 val tempFile = StorageUtils.copyUriToTempFile(context, uri)
                 if (tempFile != null) {
