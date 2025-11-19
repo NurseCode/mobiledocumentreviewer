@@ -33,7 +33,11 @@ The application is built with Kotlin and utilizes Jetpack Compose with Material 
 - **Dual-Purpose OCR**: Employs ML Kit for general document OCR and specialized parsing for receipt data extraction.
 - **Multi-page Camera Scanning**: Supports unlimited pages with CameraX for image capture and rotation fixes.
 - **Searchable PDF Creation**: Generates PDFs with an invisible text layer from OCR results.
-- **PDF Manipulation**: Includes functional PDF merge operations, with infrastructure for split, compress, and OCR text extraction.
+- **PDF Manipulation Tools Tab**: Complete suite of PDF manipulation tools:
+  - **Merge PDFs**: Select multiple PDFs and automatically combine into single file
+  - **Split PDF**: Extract specific page ranges (e.g., "1-3, 5-7") into separate PDF files
+  - **OCR Text Extract**: Render PDF pages, run ML Kit OCR, display extracted text with clipboard copy
+  - **Compress PDF**: Quality selection dialog (placeholder - copies file without compression, real implementation deferred)
 - **Document Management**: Features include naming dialogs with OCR suggestions, rename, delete, and category management via overflow menus.
 - **Database**: Room v2 includes `PdfDocument` entity with category support and `Bookmark` entity.
 - **Device Compatibility**: Targets Android 7.0 (API 24) to Android 14 (API 34), supporting various screen sizes.
