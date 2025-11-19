@@ -595,8 +595,31 @@ fun HomeScreen(viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> U
 fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: () -> Unit = {}) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val settingsManager = remember { SettingsManager(context) }
+    val safDirectoryUri by settingsManager.safDirectoryUriFlow.collectAsState(initial = null)
+    
     var showMenu by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
+    var showSplitDialog by remember { mutableStateOf(false) }
+    var showCompressDialog by remember { mutableStateOf(false) }
+    var showOcrDialog by remember { mutableStateOf(false) }
+    var showMergeDialog by remember { mutableStateOf(false) }
+    var selectedPdfFile by remember { mutableStateOf<File?>(null) }
+    val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
+    
+    val mergePdfPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val tempFile = StorageUtils.copyUriToTempFile(context, uri)
+                if (tempFile != null) {
+                    val fileName = uri.lastPathSegment ?: "document.pdf"
+                    mergePdfList.add(Pair(fileName, tempFile))
+                }
+            }
+        }
+    }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -705,6 +728,93 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                             viewModel.deleteDocument(document)
                         }
                     )
+                    
+                    HorizontalDivider()
+                    
+                    DropdownMenuItem(
+                        text = { Text("Split PDF") },
+                        leadingIcon = { Icon(Icons.Default.CallSplit, null) },
+                        onClick = {
+                            showMenu = false
+                            scope.launch {
+                                val file = if (document.filePath.startsWith("content://")) {
+                                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                                } else {
+                                    File(document.filePath)
+                                }
+                                if (file != null && file.exists()) {
+                                    selectedPdfFile = file
+                                    showSplitDialog = true
+                                } else {
+                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
+                    
+                    DropdownMenuItem(
+                        text = { Text("Compress PDF") },
+                        leadingIcon = { Icon(Icons.Default.Compress, null) },
+                        onClick = {
+                            showMenu = false
+                            scope.launch {
+                                val file = if (document.filePath.startsWith("content://")) {
+                                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                                } else {
+                                    File(document.filePath)
+                                }
+                                if (file != null && file.exists()) {
+                                    selectedPdfFile = file
+                                    showCompressDialog = true
+                                } else {
+                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
+                    
+                    DropdownMenuItem(
+                        text = { Text("Extract Text (OCR)") },
+                        leadingIcon = { Icon(Icons.Default.TextFields, null) },
+                        onClick = {
+                            showMenu = false
+                            scope.launch {
+                                val file = if (document.filePath.startsWith("content://")) {
+                                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                                } else {
+                                    File(document.filePath)
+                                }
+                                if (file != null && file.exists()) {
+                                    selectedPdfFile = file
+                                    showOcrDialog = true
+                                } else {
+                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
+                    
+                    DropdownMenuItem(
+                        text = { Text("Merge with...") },
+                        leadingIcon = { Icon(Icons.Default.MergeType, null) },
+                        onClick = {
+                            showMenu = false
+                            scope.launch {
+                                val file = if (document.filePath.startsWith("content://")) {
+                                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                                } else {
+                                    File(document.filePath)
+                                }
+                                if (file != null && file.exists()) {
+                                    mergePdfList.clear()
+                                    mergePdfList.add(Pair(document.fileName, file))
+                                    showMergeDialog = true
+                                } else {
+                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -719,6 +829,192 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                 showRenameDialog = false
             },
             onCancel = { showRenameDialog = false }
+        )
+    }
+    
+    // Split PDF Dialog
+    if (showSplitDialog && selectedPdfFile != null) {
+        SplitPdfDialog(
+            pdfFile = selectedPdfFile!!,
+            onDismiss = {
+                selectedPdfFile?.delete()
+                selectedPdfFile = null
+                showSplitDialog = false
+            },
+            onSplit = { pageRanges ->
+                scope.launch {
+                    try {
+                        val outputDir = File(context.cacheDir, "split_output")
+                        outputDir.mkdirs()
+                        val result = PdfUtils.splitPdf(selectedPdfFile!!, outputDir, pageRanges)
+                        result.onSuccess { files ->
+                            files.forEach { file ->
+                                try {
+                                    // Save to SAF or fallback to app storage
+                                    val savedUri = if (safDirectoryUri != null) {
+                                        val folderUri = Uri.parse(safDirectoryUri)
+                                        val pdfUri = StorageUtils.createPdfFile(context, folderUri, file.name)
+                                        if (pdfUri != null) {
+                                            StorageUtils.copyPdfToSaf(context, file, pdfUri)
+                                            pdfUri.toString()
+                                        } else {
+                                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), file.name)
+                                            file.copyTo(appFile, overwrite = true)
+                                            appFile.absolutePath
+                                        }
+                                    } else {
+                                        val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), file.name)
+                                        file.copyTo(appFile, overwrite = true)
+                                        appFile.absolutePath
+                                    }
+                                    
+                                    viewModel.addDocument(
+                                        file.name,
+                                        savedUri,
+                                        file.countPages(),
+                                        document.category
+                                    )
+                                } finally {
+                                    file.delete()
+                                }
+                            }
+                            Toast.makeText(context, "PDF split into ${files.size} files!", Toast.LENGTH_SHORT).show()
+                        }.onFailure {
+                            Toast.makeText(context, "Split failed: ${it.message}", Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        selectedPdfFile?.delete()
+                        selectedPdfFile = null
+                        showSplitDialog = false
+                    }
+                }
+            }
+        )
+    }
+    
+    // Compress PDF Dialog
+    if (showCompressDialog && selectedPdfFile != null) {
+        CompressPdfDialog(
+            pdfFile = selectedPdfFile!!,
+            onDismiss = {
+                selectedPdfFile?.delete()
+                selectedPdfFile = null
+                showCompressDialog = false
+            },
+            onCompress = { quality ->
+                scope.launch {
+                    val outputFile = File(context.cacheDir, "compressed_${System.currentTimeMillis()}.pdf")
+                    try {
+                        Toast.makeText(context, "Compressing PDF... (Quality: $quality)", Toast.LENGTH_SHORT).show()
+                        selectedPdfFile!!.copyTo(outputFile, overwrite = true)
+                        
+                        // Save to SAF or fallback to app storage
+                        val savedUri = if (safDirectoryUri != null) {
+                            val folderUri = Uri.parse(safDirectoryUri)
+                            val pdfUri = StorageUtils.createPdfFile(context, folderUri, outputFile.name)
+                            if (pdfUri != null) {
+                                StorageUtils.copyPdfToSaf(context, outputFile, pdfUri)
+                                pdfUri.toString()
+                            } else {
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), outputFile.name)
+                                outputFile.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                        } else {
+                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), outputFile.name)
+                            outputFile.copyTo(appFile, overwrite = true)
+                            appFile.absolutePath
+                        }
+                        
+                        viewModel.addDocument(
+                            outputFile.name,
+                            savedUri,
+                            outputFile.countPages(),
+                            document.category
+                        )
+                        Toast.makeText(context, "PDF saved!", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        outputFile.delete()
+                        selectedPdfFile?.delete()
+                        selectedPdfFile = null
+                        showCompressDialog = false
+                    }
+                }
+            }
+        )
+    }
+    
+    // OCR Text Extract Dialog
+    if (showOcrDialog && selectedPdfFile != null) {
+        OcrExtractDialog(
+            pdfFile = selectedPdfFile!!,
+            onDismiss = {
+                selectedPdfFile?.delete()
+                selectedPdfFile = null
+                showOcrDialog = false
+            }
+        )
+    }
+    
+    // Merge PDFs Dialog
+    if (showMergeDialog) {
+        MergePdfDialog(
+            pdfList = mergePdfList,
+            onAddPdf = { mergePdfPicker.launch(arrayOf("application/pdf")) },
+            onRemovePdf = { index -> mergePdfList.removeAt(index) },
+            onDismiss = {
+                mergePdfList.forEach { it.second.delete() }
+                mergePdfList.clear()
+                showMergeDialog = false
+            },
+            onMerge = {
+                scope.launch {
+                    val outputFile = File(context.cacheDir, "merged_${System.currentTimeMillis()}.pdf")
+                    try {
+                        val result = PdfUtils.mergePdfs(mergePdfList.map { it.second }, outputFile)
+                        result.onSuccess { merged ->
+                            // Save to SAF or fallback to app storage
+                            val savedUri = if (safDirectoryUri != null) {
+                                val folderUri = Uri.parse(safDirectoryUri)
+                                val pdfUri = StorageUtils.createPdfFile(context, folderUri, merged.name)
+                                if (pdfUri != null) {
+                                    StorageUtils.copyPdfToSaf(context, merged, pdfUri)
+                                    pdfUri.toString()
+                                } else {
+                                    val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), merged.name)
+                                    merged.copyTo(appFile, overwrite = true)
+                                    appFile.absolutePath
+                                }
+                            } else {
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), merged.name)
+                                merged.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                            
+                            viewModel.addDocument(
+                                merged.name,
+                                savedUri,
+                                merged.countPages(),
+                                document.category
+                            )
+                            Toast.makeText(context, "PDFs merged successfully!", Toast.LENGTH_SHORT).show()
+                        }.onFailure {
+                            Toast.makeText(context, "Merge failed: ${it.message}", Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        outputFile.delete()
+                        mergePdfList.forEach { it.second.delete() }
+                        mergePdfList.clear()
+                        showMergeDialog = false
+                    }
+                }
+            }
         )
     }
 }
@@ -1130,6 +1426,9 @@ fun ScanScreen(viewModel: PdfViewModel) {
 fun ToolsScreen(viewModel: PdfViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val settingsManager = remember { SettingsManager(context) }
+    val safDirectoryUri by settingsManager.safDirectoryUriFlow.collectAsState(initial = null)
+    
     var selectedPdfUri by remember { mutableStateOf<Uri?>(null) }
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     var showSplitDialog by remember { mutableStateOf(false) }
@@ -1279,12 +1578,31 @@ fun ToolsScreen(viewModel: PdfViewModel) {
                         val result = PdfUtils.splitPdf(selectedPdfFile!!, outputDir, pageRanges)
                         result.onSuccess { files ->
                             files.forEach { file ->
+                                // Save to SAF or fallback to app storage
+                                val savedUri = if (safDirectoryUri != null) {
+                                    val folderUri = Uri.parse(safDirectoryUri)
+                                    val pdfUri = StorageUtils.createPdfFile(context, folderUri, file.name)
+                                    if (pdfUri != null) {
+                                        StorageUtils.copyPdfToSaf(context, file, pdfUri)
+                                        pdfUri.toString()
+                                    } else {
+                                        val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), file.name)
+                                        file.copyTo(appFile, overwrite = true)
+                                        appFile.absolutePath
+                                    }
+                                } else {
+                                    val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), file.name)
+                                    file.copyTo(appFile, overwrite = true)
+                                    appFile.absolutePath
+                                }
+                                
                                 viewModel.addDocument(
                                     file.name,
-                                    file.absolutePath,
+                                    savedUri,
                                     file.countPages(),
                                     ""
                                 )
+                                file.delete()  // Clean up temp file
                             }
                             Toast.makeText(context, "PDF split into ${files.size} files!", Toast.LENGTH_SHORT).show()
                         }.onFailure {
@@ -1317,12 +1635,32 @@ fun ToolsScreen(viewModel: PdfViewModel) {
                         // For now, just copy the file - full compression requires image resampling
                         val outputFile = File(context.cacheDir, "compressed_${System.currentTimeMillis()}.pdf")
                         selectedPdfFile!!.copyTo(outputFile, overwrite = true)
+                        
+                        // Save to SAF or fallback to app storage
+                        val savedUri = if (safDirectoryUri != null) {
+                            val folderUri = Uri.parse(safDirectoryUri)
+                            val pdfUri = StorageUtils.createPdfFile(context, folderUri, outputFile.name)
+                            if (pdfUri != null) {
+                                StorageUtils.copyPdfToSaf(context, outputFile, pdfUri)
+                                pdfUri.toString()
+                            } else {
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), outputFile.name)
+                                outputFile.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                        } else {
+                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), outputFile.name)
+                            outputFile.copyTo(appFile, overwrite = true)
+                            appFile.absolutePath
+                        }
+                        
                         viewModel.addDocument(
                             outputFile.name,
-                            outputFile.absolutePath,
+                            savedUri,
                             outputFile.countPages(),
                             ""
                         )
+                        outputFile.delete()  // Clean up temp file
                         Toast.makeText(context, "PDF saved! (Full compression coming soon)", Toast.LENGTH_SHORT).show()
                         selectedPdfFile?.delete()
                         selectedPdfFile = null
@@ -1364,12 +1702,31 @@ fun ToolsScreen(viewModel: PdfViewModel) {
                         val outputFile = File(context.cacheDir, "merged_${System.currentTimeMillis()}.pdf")
                         val result = PdfUtils.mergePdfs(mergePdfList.map { it.second }, outputFile)
                         result.onSuccess { merged ->
+                            // Save to SAF or fallback to app storage
+                            val savedUri = if (safDirectoryUri != null) {
+                                val folderUri = Uri.parse(safDirectoryUri)
+                                val pdfUri = StorageUtils.createPdfFile(context, folderUri, merged.name)
+                                if (pdfUri != null) {
+                                    StorageUtils.copyPdfToSaf(context, merged, pdfUri)
+                                    pdfUri.toString()
+                                } else {
+                                    val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), merged.name)
+                                    merged.copyTo(appFile, overwrite = true)
+                                    appFile.absolutePath
+                                }
+                            } else {
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), merged.name)
+                                merged.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                            
                             viewModel.addDocument(
                                 merged.name,
-                                merged.absolutePath,
+                                savedUri,
                                 merged.countPages(),
                                 ""
                             )
+                            merged.delete()  // Clean up temp file
                             Toast.makeText(context, "PDFs merged successfully!", Toast.LENGTH_SHORT).show()
                             mergePdfList.forEach { it.second.delete() }
                             mergePdfList.clear()
