@@ -1527,7 +1527,7 @@ fun OcrExtractDialog(
     var isLoading by remember { mutableStateOf(true) }
     
     LaunchedEffect(pdfFile) {
-        scope.launch {
+        scope.launch(Dispatchers.IO) {
             try {
                 val renderer = PdfRenderer(ParcelFileDescriptor.open(pdfFile, ParcelFileDescriptor.MODE_READ_ONLY))
                 val fullText = StringBuilder()
@@ -1538,11 +1538,21 @@ fun OcrExtractDialog(
                     page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
                     page.close()
                     
-                    val ocrResult = CameraUtils.performOCR(context, bitmap)
-                    ocrResult.onSuccess { ocr ->
-                        fullText.append("--- Page ${i + 1} ---\n")
-                        fullText.append(ocr.fullText)
-                        fullText.append("\n\n")
+                    val tempImageFile = File(context.cacheDir, "ocr_page_${i}.jpg")
+                    try {
+                        FileOutputStream(tempImageFile).use { out ->
+                            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                        }
+                        
+                        val ocrResult = CameraUtils.extractTextFromImage(context, tempImageFile)
+                        ocrResult.onSuccess { ocr ->
+                            fullText.append("--- Page ${i + 1} ---\n")
+                            fullText.append(ocr.fullText)
+                            fullText.append("\n\n")
+                        }
+                    } finally {
+                        tempImageFile.delete()
+                        bitmap.recycle()
                     }
                 }
                 renderer.close()
