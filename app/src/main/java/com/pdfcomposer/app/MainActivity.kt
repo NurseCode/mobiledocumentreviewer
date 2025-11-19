@@ -28,6 +28,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -1133,40 +1135,18 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     var showSplitDialog by remember { mutableStateOf(false) }
     var showCompressDialog by remember { mutableStateOf(false) }
     var showOcrDialog by remember { mutableStateOf(false) }
+    var showMergeDialog by remember { mutableStateOf(false) }
+    val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
     
     val mergePdfPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenMultipleDocuments()
-    ) { uris ->
-        if (uris.isNotEmpty()) {
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
             scope.launch {
-                val pdfFiles = mutableListOf<File>()
-                try {
-                    uris.forEach { uri ->
-                        StorageUtils.copyUriToTempFile(context, uri)?.let { pdfFiles.add(it) }
-                    }
-                    
-                    if (pdfFiles.size >= 2) {
-                        val outputFile = File(context.cacheDir, "merged_${System.currentTimeMillis()}.pdf")
-                        val result = PdfUtils.mergePdfs(pdfFiles, outputFile)
-                        result.onSuccess { merged ->
-                            viewModel.addDocument(
-                                merged.name,
-                                merged.absolutePath,
-                                merged.countPages(),
-                                ""
-                            )
-                            Toast.makeText(context, "PDFs merged successfully!", Toast.LENGTH_SHORT).show()
-                        }.onFailure {
-                            Toast.makeText(context, "Merge failed: ${it.message}", Toast.LENGTH_LONG).show()
-                        }
-                    } else {
-                        Toast.makeText(context, "Please select at least 2 PDFs", Toast.LENGTH_SHORT).show()
-                    }
-                } catch (e: Exception) {
-                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
-                } finally {
-                    // Always cleanup temp files
-                    pdfFiles.forEach { it.delete() }
+                val tempFile = StorageUtils.copyUriToTempFile(context, uri)
+                if (tempFile != null) {
+                    val fileName = uri.lastPathSegment ?: "document.pdf"
+                    mergePdfList.add(Pair(fileName, tempFile))
                 }
             }
         }
@@ -1233,7 +1213,7 @@ fun ToolsScreen(viewModel: PdfViewModel) {
             title = "Merge PDFs",
             description = "Combine multiple PDF files into one",
             icon = Icons.Default.MergeType,
-            onClick = { mergePdfPicker.launch(arrayOf("application/pdf")) }
+            onClick = { showMergeDialog = true }
         )
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -1366,6 +1346,44 @@ fun ToolsScreen(viewModel: PdfViewModel) {
             }
         )
     }
+    
+    // Merge PDFs Dialog
+    if (showMergeDialog) {
+        MergePdfDialog(
+            pdfList = mergePdfList,
+            onAddPdf = { mergePdfPicker.launch(arrayOf("application/pdf")) },
+            onRemovePdf = { index -> mergePdfList.removeAt(index) },
+            onDismiss = {
+                mergePdfList.forEach { it.second.delete() }
+                mergePdfList.clear()
+                showMergeDialog = false
+            },
+            onMerge = {
+                scope.launch {
+                    try {
+                        val outputFile = File(context.cacheDir, "merged_${System.currentTimeMillis()}.pdf")
+                        val result = PdfUtils.mergePdfs(mergePdfList.map { it.second }, outputFile)
+                        result.onSuccess { merged ->
+                            viewModel.addDocument(
+                                merged.name,
+                                merged.absolutePath,
+                                merged.countPages(),
+                                ""
+                            )
+                            Toast.makeText(context, "PDFs merged successfully!", Toast.LENGTH_SHORT).show()
+                            mergePdfList.forEach { it.second.delete() }
+                            mergePdfList.clear()
+                            showMergeDialog = false
+                        }.onFailure {
+                            Toast.makeText(context, "Merge failed: ${it.message}", Toast.LENGTH_LONG).show()
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1401,6 +1419,96 @@ fun ToolCard(title: String, description: String, icon: androidx.compose.ui.graph
             }
         }
     }
+}
+
+@Composable
+fun MergePdfDialog(
+    pdfList: List<Pair<String, File>>,
+    onAddPdf: () -> Unit,
+    onRemovePdf: (Int) -> Unit,
+    onDismiss: () -> Unit,
+    onMerge: () -> Unit
+) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Merge PDFs") },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "${pdfList.size} PDF(s) selected",
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                if (pdfList.isEmpty()) {
+                    Text(
+                        "Tap 'Add PDF' to select files to merge",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 300.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        pdfList.forEachIndexed { index, (name, _) ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    modifier = Modifier.weight(1f),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text("${index + 1}. ", style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        name.substringAfterLast("/").take(30),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1
+                                    )
+                                }
+                                androidx.compose.material3.IconButton(
+                                    onClick = { onRemovePdf(index) }
+                                ) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Remove")
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                androidx.compose.material3.Button(
+                    onClick = onAddPdf,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add PDF")
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                onClick = onMerge,
+                enabled = pdfList.size >= 2
+            ) {
+                Text("Merge")
+            }
+        },
+        dismissButton = {
+            androidx.compose.material3.TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
