@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace 'com.pdfcomposer.app'
-    compileSdk 34
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.pdfcomposer.app"
