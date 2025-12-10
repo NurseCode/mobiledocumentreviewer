@@ -17,8 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.rroohit.imagecropview.ImageCrop
-import com.rroohit.imagecropview.util.CropType
+import com.image.cropview.ImageCrop
+import com.image.cropview.CropType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
