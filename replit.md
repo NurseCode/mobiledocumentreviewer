@@ -31,6 +31,7 @@ The application is built with Kotlin and utilizes Jetpack Compose with Material 
 - **Embedded Bookmarks**: Utilizes Apache PDFBox to embed bookmarks directly into PDF files, ensuring compatibility across all PDF readers.
 - **Android Share Intent**: For universal sharing to cloud services without requiring individual API integrations.
 - **Dual-Purpose OCR**: Employs ML Kit for general document OCR and specialized parsing for receipt data extraction.
+- **Smart Scan with Edge Detection**: Uses ML Kit Document Scanner for automatic document edge detection, perspective correction, and cropping. Supports both camera capture and gallery import with ML-powered document boundary detection.
 - **Multi-page Camera Scanning**: Supports unlimited pages with CameraX for image capture and rotation fixes.
 - **Searchable PDF Creation**: Generates PDFs with an invisible text layer from OCR results.
 - **PDF Manipulation Tools Tab**: Complete suite of PDF manipulation tools:

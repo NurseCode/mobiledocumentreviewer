@@ -49,6 +49,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import androidx.activity.result.IntentSenderRequest
+import android.app.Activity
 
 @Entity(tableName = "bookmarks")
 data class Bookmark(
@@ -1109,6 +1111,88 @@ fun ScanScreen(viewModel: PdfViewModel) {
     var pendingSaveData by remember { mutableStateOf<PendingSaveData?>(null) }
     var galleryImageToCrop by remember { mutableStateOf<File?>(null) }
     
+    val activity = context as? Activity
+    
+    val documentScannerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        val scanResult = DocumentScannerUtils.parseResult(result.resultCode, result.data)
+        if (scanResult != null && scanResult.imageUris.isNotEmpty()) {
+            scope.launch {
+                isProcessing = true
+                processingMessage = "Processing scanned document..."
+                
+                try {
+                    val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                    
+                    // Copy scanned images to temp files for processing
+                    val scannedFiles = mutableListOf<File>()
+                    scanResult.imageUris.forEachIndexed { index, uri ->
+                        processingMessage = "Processing page ${index + 1} of ${scanResult.imageUris.size}..."
+                        val tempFile = File(context.cacheDir, "scanned_${timestamp}_$index.jpg")
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            tempFile.outputStream().use { output ->
+                                input.copyTo(output)
+                            }
+                        }
+                        scannedFiles.add(tempFile)
+                    }
+                    
+                    // Perform OCR on all pages
+                    val ocrResults = mutableListOf<OcrResult>()
+                    scannedFiles.forEachIndexed { index, file ->
+                        processingMessage = "OCR page ${index + 1} of ${scannedFiles.size}..."
+                        val ocrResult = CameraUtils.extractTextFromImage(context, file)
+                        ocrResult.onSuccess { ocr ->
+                            ocrResults.add(ocr)
+                        }
+                    }
+                    
+                    processingMessage = "Creating PDF..."
+                    val pdfFile = File(context.cacheDir, "smartscan_$timestamp.pdf")
+                    
+                    val result = if (scannedFiles.size == 1) {
+                        ImageToPdfUtils.imageToPdf(context, scannedFiles[0], pdfFile)
+                    } else {
+                        ImageToPdfUtils.imagesToPdf(context, scannedFiles, pdfFile)
+                    }
+                    
+                    result.onSuccess { pdf ->
+                        val suggestedName = if (ocrResults.isNotEmpty()) {
+                            val docType = CameraUtils.detectDocumentType(ocrResults[0].fullText)
+                            when (docType) {
+                                DocumentType.RECEIPT -> "Receipt_$timestamp"
+                                DocumentType.CONTRACT -> "Contract_$timestamp"
+                                DocumentType.FORM -> "Form_$timestamp"
+                                DocumentType.LETTER -> "Letter_$timestamp"
+                                DocumentType.GENERAL -> "Document_$timestamp"
+                            }
+                        } else {
+                            "Scan_$timestamp"
+                        }
+                        
+                        pendingSaveData = PendingSaveData(
+                            pdfFile = pdf,
+                            pageCount = scannedFiles.size,
+                            suggestedName = suggestedName,
+                            ocrResults = ocrResults
+                        )
+                        showNamingDialog = true
+                        
+                        // Cleanup temp files
+                        scannedFiles.forEach { it.delete() }
+                    }.onFailure {
+                        scannedFiles.forEach { it.delete() }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    isProcessing = false
+                }
+            }
+        }
+    }
+    
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
@@ -1343,6 +1427,35 @@ fun ScanScreen(viewModel: PdfViewModel) {
                 
                 Button(
                     onClick = {
+                        activity?.let { act ->
+                            DocumentScannerUtils.launchScanner(
+                                activity = act,
+                                launcher = documentScannerLauncher,
+                                galleryImportAllowed = true,
+                                pageLimit = 20,
+                                includePdf = false,
+                                onError = { e ->
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        "Scanner not available: ${e.message}",
+                                        android.widget.Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isProcessing && activity != null
+                ) {
+                    Icon(Icons.Default.DocumentScanner, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Smart Scan (Auto Edge Detection)")
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                OutlinedButton(
+                    onClick = {
                         if (hasCameraPermission) {
                             showMultiPageScan = true
                         } else {
@@ -1354,7 +1467,7 @@ fun ScanScreen(viewModel: PdfViewModel) {
                 ) {
                     Icon(Icons.Default.CameraAlt, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Scan New Document")
+                    Text("Manual Camera Scan")
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -1378,13 +1491,13 @@ fun ScanScreen(viewModel: PdfViewModel) {
                 ) {
                     Icon(Icons.Default.PhotoLibrary, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Upload from Gallery")
+                    Text("Upload from Gallery (Manual Crop)")
                 }
                 
                 Spacer(modifier = Modifier.height(32.dp))
                 
                 Text(
-                    text = "Scan documents with camera, or open existing PDFs from anywhere (Dropbox, Drive, local storage)",
+                    text = "Smart Scan uses ML-powered edge detection to automatically find and crop documents. Manual options available as fallback.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
