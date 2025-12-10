@@ -111,6 +111,9 @@ dependencies {
     // PDFBox for PDF manipulation and bookmark embedding
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
     
+    // Image Crop View for document scanning
+    implementation 'io.github.rroohit:ImageCropView:3.1.1'
+    
     // Testing
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
