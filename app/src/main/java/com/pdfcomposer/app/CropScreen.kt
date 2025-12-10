@@ -34,6 +34,7 @@ fun CropScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     
     var originalBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var currentBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -41,15 +42,30 @@ fun CropScreen(
     var cropType by remember { mutableStateOf(CropType.FREE_STYLE) }
     var isSaving by remember { mutableStateOf(false) }
     var imageCrop by remember { mutableStateOf<ImageCrop?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    
+    LaunchedEffect(errorMessage) {
+        errorMessage?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            errorMessage = null
+        }
+    }
     
     LaunchedEffect(imageFile) {
         val loadedBitmap = withContext(Dispatchers.IO) {
-            BitmapFactory.decodeFile(imageFile.absolutePath)
+            try {
+                BitmapFactory.decodeFile(imageFile.absolutePath)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
         }
-        originalBitmap = loadedBitmap
-        currentBitmap = loadedBitmap
         if (loadedBitmap != null) {
+            originalBitmap = loadedBitmap
+            currentBitmap = loadedBitmap
             imageCrop = ImageCrop(loadedBitmap)
+        } else {
+            errorMessage = "Failed to load image"
         }
     }
     
@@ -123,6 +139,8 @@ fun CropScreen(
                                 isSaving = false
                                 if (croppedFile != null) {
                                     onCropComplete(croppedFile)
+                                } else {
+                                    errorMessage = "Failed to crop image"
                                 }
                             }
                         },
@@ -139,7 +157,16 @@ fun CropScreen(
                 )
             )
         },
-        containerColor = Color.Black
+        containerColor = Color.Black,
+        snackbarHost = {
+            SnackbarHost(snackbarHostState) { data ->
+                Snackbar(
+                    snackbarData = data,
+                    containerColor = Color.DarkGray,
+                    contentColor = Color.White
+                )
+            }
+        }
     ) { paddingValues ->
         Box(
             modifier = Modifier

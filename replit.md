@@ -19,7 +19,7 @@ The application is built with Kotlin and utilizes Jetpack Compose with Material 
 ### UI/UX Decisions
 - **Jetpack Compose**: Modern declarative UI for responsive layouts across phones and tablets.
 - **Material 3 Theming**: Consistent and modern visual design.
-- **Advanced Crop Tool**: Features interactive handles, rotation preservation, and auto-edge detection for precise document scanning.
+- **Advanced Crop Tool**: Uses ImageCropView library (v3.1.1) with rule-of-thirds grid, rotation support, aspect ratio toggle (free-style/square), and dark theme UI.
 - **PDF Viewer**: Includes pinch-to-zoom and pan functionality for improved readability.
 - **Navigation**: Uses NavigationBar and NavigationRail with proper text wrapping for usability.
 - **Settings Screen**: Comprehensive settings for storage, quality, OCR language, theme, and sorting.
@@ -51,4 +51,5 @@ The application is built with Kotlin and utilizes Jetpack Compose with Material 
 - **Material 3 Components**: UI components
 - **Apache PDFBox Android**: PDF manipulation (e.g., merging, bookmark embedding)
 - **Android PdfRenderer and PdfDocument**: Native PDF rendering and creation
+- **ImageCropView**: Jetpack Compose image cropping library (v3.1.1)
 - **GitHub Actions**: CI/CD for automated builds
