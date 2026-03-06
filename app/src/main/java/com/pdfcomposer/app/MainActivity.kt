@@ -297,7 +297,7 @@ fun MainScreen(viewModel: PdfViewModel) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Quick PDF Composer") },
+                title = { Text("Doc Tracker Pro") },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
                     titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer

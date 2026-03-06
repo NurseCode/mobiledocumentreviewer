@@ -1,7 +1,7 @@
-# Quick PDF Composer - Project Documentation
+# Doc Tracker Pro - Project Documentation
 
 ## Overview
-Quick PDF Composer is a native Android application designed for offline PDF creation, scanning, OCR, and manipulation. Developed using Kotlin and Jetpack Compose, it targets Android phones and tablets, offering a responsive UI and an offline-first approach. The app aims to be a comprehensive productivity tool for PDF document management, supporting features like multi-page scanning, searchable PDF creation, PDF merging/splitting, and robust file management. Its ambition is to provide a seamless user experience for managing documents entirely on-device, with easy deployment to the Google Play Console facilitated by GitHub Actions for automated builds.
+Doc Tracker Pro is a native Android application designed for offline PDF creation, scanning, OCR, and manipulation. Developed using Kotlin and Jetpack Compose, it targets Android phones and tablets, offering a responsive UI and an offline-first approach. The app aims to be a comprehensive productivity tool for PDF document management, supporting features like multi-page scanning, searchable PDF creation, PDF merging/splitting, and robust file management. Its ambition is to provide a seamless user experience for managing documents entirely on-device, with easy deployment to the Google Play Console facilitated by GitHub Actions for automated builds.
 
 ## User Preferences
 - **Development Environment**: Replit (no Android Studio due to storage limitations)
