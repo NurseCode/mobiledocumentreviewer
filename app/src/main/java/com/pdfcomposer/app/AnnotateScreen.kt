@@ -1,7 +1,11 @@
 package com.pdfcomposer.app
 
 import android.content.Context
-import android.graphics.*
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument as AndroidPdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
@@ -40,28 +44,28 @@ enum class AnnotationTool {
 
 data class AnnotationStroke(
     val points: List<Offset>,
-    val color: Color,
+    val color: androidx.compose.ui.graphics.Color,
     val strokeWidth: Float,
     val alpha: Float,
     val tool: AnnotationTool
 )
 
 val annotationColors = listOf(
-    Color.Black,
-    Color.Red,
-    Color.Blue,
-    Color(0xFF2E7D32),
-    Color(0xFFFF6F00),
-    Color(0xFF6A1B9A),
-    Color(0xFFAD1457)
+    androidx.compose.ui.graphics.Color.Black,
+    androidx.compose.ui.graphics.Color.Red,
+    androidx.compose.ui.graphics.Color.Blue,
+    androidx.compose.ui.graphics.Color(0xFF2E7D32),
+    androidx.compose.ui.graphics.Color(0xFFFF6F00),
+    androidx.compose.ui.graphics.Color(0xFF6A1B9A),
+    androidx.compose.ui.graphics.Color(0xFFAD1457)
 )
 
 val highlightColors = listOf(
-    Color.Yellow,
-    Color(0xFF80FF80),
-    Color(0xFF80D4FF),
-    Color(0xFFFF80AB),
-    Color(0xFFFFCC80)
+    androidx.compose.ui.graphics.Color.Yellow,
+    androidx.compose.ui.graphics.Color(0xFF80FF80),
+    androidx.compose.ui.graphics.Color(0xFF80D4FF),
+    androidx.compose.ui.graphics.Color(0xFFFF80AB),
+    androidx.compose.ui.graphics.Color(0xFFFFCC80)
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -561,7 +565,7 @@ suspend fun embedAnnotationsInPdf(
     }
 }
 
-fun androidColorFromComposeColor(color: Color): Int {
+fun androidColorFromComposeColor(color: androidx.compose.ui.graphics.Color): Int {
     return android.graphics.Color.argb(
         (color.alpha * 255).toInt(),
         (color.red * 255).toInt(),
