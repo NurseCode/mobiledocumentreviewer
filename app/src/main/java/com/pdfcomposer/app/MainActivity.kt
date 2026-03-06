@@ -1609,6 +1609,10 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     var showOcrDialog by remember { mutableStateOf(false) }
     var showMergeDialog by remember { mutableStateOf(false) }
     val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
+    var showSignatureDialog by remember { mutableStateOf(false) }
+    var showSignPlacement by remember { mutableStateOf(false) }
+    var signatureBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var signPdfFile by remember { mutableStateOf<File?>(null) }
     
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -1666,6 +1670,25 @@ fun ToolsScreen(viewModel: PdfViewModel) {
                     showOcrDialog = true
                 }
             }
+        }
+    }
+    
+    val signPdfPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val tempFile = StorageUtils.copyUriToTempFile(context, uri)
+                if (tempFile != null) {
+                    signPdfFile = tempFile
+                    showSignPlacement = true
+                } else {
+                    Toast.makeText(context, "Failed to open PDF file", Toast.LENGTH_SHORT).show()
+                    signatureBitmap = null
+                }
+            }
+        } else {
+            signatureBitmap = null
         }
     }
     
@@ -1728,9 +1751,9 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         
         ToolCard(
             title = "Sign Document",
-            description = "Draw signature and embed in PDF",
-            icon = Icons.Default.Edit,
-            onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() }
+            description = "Draw, type, or upload a signature",
+            icon = Icons.Default.Draw,
+            onClick = { showSignatureDialog = true }
         )
     }
     
@@ -1910,6 +1933,63 @@ fun ToolsScreen(viewModel: PdfViewModel) {
                     } catch (e: Exception) {
                         Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
                     }
+                }
+            }
+        )
+    }
+    
+    if (showSignatureDialog) {
+        SignDocumentDialog(
+            onDismiss = { showSignatureDialog = false },
+            onSignatureReady = { bitmap ->
+                signatureBitmap = bitmap
+                showSignatureDialog = false
+                signPdfPicker.launch(arrayOf("application/pdf"))
+            }
+        )
+    }
+    
+    if (showSignPlacement && signPdfFile != null && signatureBitmap != null) {
+        SignPdfScreen(
+            pdfFile = signPdfFile!!,
+            signatureBitmap = signatureBitmap!!,
+            onDismiss = {
+                signPdfFile?.delete()
+                signPdfFile = null
+                signatureBitmap = null
+                showSignPlacement = false
+            },
+            onSigned = { signedFile ->
+                scope.launch {
+                    val savedUri = if (safDirectoryUri != null) {
+                        val folderUri = Uri.parse(safDirectoryUri)
+                        val pdfUri = StorageUtils.createPdfFile(context, folderUri, signedFile.name)
+                        if (pdfUri != null) {
+                            StorageUtils.copyPdfToSaf(context, signedFile, pdfUri)
+                            pdfUri.toString()
+                        } else {
+                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), signedFile.name)
+                            signedFile.copyTo(appFile, overwrite = true)
+                            appFile.absolutePath
+                        }
+                    } else {
+                        val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), signedFile.name)
+                        signedFile.copyTo(appFile, overwrite = true)
+                        appFile.absolutePath
+                    }
+                    
+                    viewModel.addDocument(
+                        signedFile.name,
+                        savedUri,
+                        signedFile.countPages(),
+                        ""
+                    )
+                    signedFile.delete()
+                    signPdfFile?.delete()
+                    signPdfFile = null
+                    signatureBitmap = null
+                    showSignPlacement = false
+                    Toast.makeText(context, "Document signed successfully!", Toast.LENGTH_SHORT).show()
                 }
             }
         )
