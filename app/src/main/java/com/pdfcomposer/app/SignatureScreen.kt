@@ -1,7 +1,13 @@
 package com.pdfcomposer.app
 
+import android.app.Activity
 import android.content.Context
-import android.graphics.*
+import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.PorterDuff
+import android.graphics.Rect
+import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument as AndroidPdfDocument
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
@@ -38,6 +44,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -61,6 +69,15 @@ fun SignDocumentDialog(
     onSignatureReady: (Bitmap) -> Unit
 ) {
     var selectedMethod by remember { mutableStateOf(SignatureMethod.DRAW) }
+    var showFullScreenDraw by remember { mutableStateOf(false) }
+
+    if (showFullScreenDraw) {
+        FullScreenDrawSignature(
+            onDismiss = { showFullScreenDraw = false },
+            onSignatureReady = onSignatureReady
+        )
+        return
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -84,41 +101,41 @@ fun SignDocumentDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     FilterChip(
                         selected = selectedMethod == SignatureMethod.DRAW,
                         onClick = { selectedMethod = SignatureMethod.DRAW },
-                        label = { Text("Draw") },
+                        label = { Text("Draw", maxLines = 1) },
                         leadingIcon = {
                             Icon(
                                 if (selectedMethod == SignatureMethod.DRAW) Icons.Default.Check else Icons.Default.Draw,
                                 null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     )
                     FilterChip(
                         selected = selectedMethod == SignatureMethod.TYPE,
                         onClick = { selectedMethod = SignatureMethod.TYPE },
-                        label = { Text("Type") },
+                        label = { Text("Type", maxLines = 1) },
                         leadingIcon = {
                             Icon(
                                 if (selectedMethod == SignatureMethod.TYPE) Icons.Default.Check else Icons.Default.Keyboard,
                                 null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     )
                     FilterChip(
                         selected = selectedMethod == SignatureMethod.IMAGE,
                         onClick = { selectedMethod = SignatureMethod.IMAGE },
-                        label = { Text("Upload") },
+                        label = { Text("Upload", maxLines = 1) },
                         leadingIcon = {
                             Icon(
                                 if (selectedMethod == SignatureMethod.IMAGE) Icons.Default.Check else Icons.Default.Image,
                                 null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
                         }
                     )
@@ -127,7 +144,21 @@ fun SignDocumentDialog(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 when (selectedMethod) {
-                    SignatureMethod.DRAW -> DrawSignaturePanel(onSignatureReady)
+                    SignatureMethod.DRAW -> {
+                        Text(
+                            "Tap below to open full-screen signing pad:",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { showFullScreenDraw = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Default.Draw, null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Open Signing Pad")
+                        }
+                    }
                     SignatureMethod.TYPE -> TypeSignaturePanel(onSignatureReady)
                     SignatureMethod.IMAGE -> UploadSignaturePanel(onSignatureReady)
                 }
@@ -145,108 +176,126 @@ fun SignDocumentDialog(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DrawSignaturePanel(onSignatureReady: (Bitmap) -> Unit) {
+fun FullScreenDrawSignature(
+    onDismiss: () -> Unit,
+    onSignatureReady: (Bitmap) -> Unit
+) {
+    val context = LocalContext.current
     val points = remember { mutableStateListOf<DrawPoint>() }
     var canvasWidth by remember { mutableStateOf(0) }
     var canvasHeight by remember { mutableStateOf(0) }
 
-    Column {
-        Text(
-            "Draw your signature below:",
-            style = MaterialTheme.typography.bodyMedium
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+    val activity = context as? Activity
+    DisposableEffect(Unit) {
+        val originalOrientation = activity?.requestedOrientation
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        onDispose {
+            activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 200.dp)
-                .aspectRatio(2.5f)
-                .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                .background(Color(0xFFFFFDE7), RoundedCornerShape(8.dp))
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface
         ) {
-            if (points.isEmpty()) {
-                Text(
-                    "Sign here",
-                    modifier = Modifier.align(Alignment.Center),
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color(0x40000000)
-                )
-            }
-            Canvas(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(Unit) {
-                        canvasWidth = size.width
-                        canvasHeight = size.height
-                        detectDragGestures(
-                            onDragStart = { offset ->
-                                points.add(DrawPoint(offset.x, offset.y, true))
+            Column(modifier = Modifier.fillMaxSize()) {
+                TopAppBar(
+                    title = { Text("Sign Your Name") },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Default.Close, "Cancel")
+                        }
+                    },
+                    actions = {
+                        TextButton(onClick = { points.clear() }) {
+                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Clear")
+                        }
+                        Button(
+                            onClick = {
+                                if (points.isNotEmpty() && canvasWidth > 0 && canvasHeight > 0) {
+                                    val bitmap = createBitmapFromDrawPoints(points, canvasWidth, canvasHeight)
+                                    onSignatureReady(bitmap)
+                                }
                             },
-                            onDrag = { change, _ ->
-                                points.add(
-                                    DrawPoint(
-                                        change.position.x,
-                                        change.position.y,
-                                        false
-                                    )
+                            enabled = points.isNotEmpty(),
+                            modifier = Modifier.padding(end = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Done")
+                        }
+                    }
+                )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                        .background(Color(0xFFFFFDE7), RoundedCornerShape(12.dp))
+                ) {
+                    if (points.isEmpty()) {
+                        Text(
+                            "Sign here",
+                            modifier = Modifier.align(Alignment.Center),
+                            style = MaterialTheme.typography.headlineMedium,
+                            color = Color(0x30000000)
+                        )
+                    }
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                canvasWidth = size.width
+                                canvasHeight = size.height
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        points.add(DrawPoint(offset.x, offset.y, true))
+                                    },
+                                    onDrag = { change, _ ->
+                                        points.add(
+                                            DrawPoint(
+                                                change.position.x,
+                                                change.position.y,
+                                                false
+                                            )
+                                        )
+                                    }
                                 )
                             }
-                        )
-                    }
-            ) {
-                canvasWidth = size.width.toInt()
-                canvasHeight = size.height.toInt()
+                    ) {
+                        canvasWidth = size.width.toInt()
+                        canvasHeight = size.height.toInt()
 
-                drawLine(
-                    color = Color(0x30000000),
-                    start = Offset(20f, size.height * 0.75f),
-                    end = Offset(size.width - 20f, size.height * 0.75f),
-                    strokeWidth = 1f
-                )
-
-                for (i in 1 until points.size) {
-                    if (!points[i].isStart) {
                         drawLine(
-                            color = Color.Black,
-                            start = Offset(points[i - 1].x, points[i - 1].y),
-                            end = Offset(points[i].x, points[i].y),
-                            strokeWidth = 4f,
-                            cap = StrokeCap.Round
+                            color = Color(0x30000000),
+                            start = Offset(40f, size.height * 0.75f),
+                            end = Offset(size.width - 40f, size.height * 0.75f),
+                            strokeWidth = 1.5f
                         )
+
+                        for (i in 1 until points.size) {
+                            if (!points[i].isStart) {
+                                drawLine(
+                                    color = Color.Black,
+                                    start = Offset(points[i - 1].x, points[i - 1].y),
+                                    end = Offset(points[i].x, points[i].y),
+                                    strokeWidth = 4f,
+                                    cap = StrokeCap.Round
+                                )
+                            }
+                        }
                     }
                 }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            OutlinedButton(
-                onClick = { points.clear() },
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Clear", maxLines = 1)
-            }
-            Button(
-                onClick = {
-                    if (points.isNotEmpty() && canvasWidth > 0 && canvasHeight > 0) {
-                        val bitmap = createBitmapFromDrawPoints(points, canvasWidth, canvasHeight)
-                        onSignatureReady(bitmap)
-                    }
-                },
-                enabled = points.isNotEmpty(),
-                modifier = Modifier.weight(1f)
-            ) {
-                Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Done", maxLines = 1)
             }
         }
     }

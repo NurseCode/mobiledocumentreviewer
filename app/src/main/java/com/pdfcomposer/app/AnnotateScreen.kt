@@ -15,11 +15,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -32,6 +32,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -84,6 +86,7 @@ fun AnnotatePdfDialog(
     var selectedColor by remember { mutableStateOf(Color.Black) }
     var strokeWidth by remember { mutableStateOf(4f) }
     var isProcessing by remember { mutableStateOf(false) }
+    var showToolOptions by remember { mutableStateOf(false) }
 
     val allAnnotations = remember { mutableStateMapOf<Int, MutableList<AnnotationStroke>>() }
     val currentPoints = remember { mutableStateListOf<Offset>() }
@@ -95,7 +98,7 @@ fun AnnotatePdfDialog(
                 val renderer = PdfRenderer(fd)
                 pageCount = renderer.pageCount
                 val page = renderer.openPage(currentPage)
-                val scale = 2
+                val scale = 3
                 val bitmap = Bitmap.createBitmap(
                     page.width * scale, page.height * scale, Bitmap.Config.ARGB_8888
                 )
@@ -111,73 +114,137 @@ fun AnnotatePdfDialog(
         }
     }
 
-    AlertDialog(
+    Dialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.fillMaxWidth(0.95f)
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp
+            modifier = Modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.surface
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    "Annotate & Draw",
-                    style = MaterialTheme.typography.headlineSmall
+            Column(modifier = Modifier.fillMaxSize()) {
+                TopAppBar(
+                    title = { Text("Annotate & Draw") },
+                    navigationIcon = {
+                        IconButton(onClick = onDismiss, enabled = !isProcessing) {
+                            Icon(Icons.Default.Close, "Close")
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                allAnnotations[currentPage]?.let {
+                                    if (it.isNotEmpty()) it.removeAt(it.lastIndex)
+                                }
+                            }
+                        ) {
+                            Icon(Icons.Default.Undo, "Undo")
+                        }
+                        IconButton(onClick = { allAnnotations[currentPage]?.clear() }) {
+                            Icon(Icons.Default.DeleteSweep, "Clear")
+                        }
+                        if (isProcessing) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp).padding(2.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Button(
+                                onClick = {
+                                    isProcessing = true
+                                    scope.launch {
+                                        val result = embedAnnotationsInPdf(
+                                            context, pdfFile, allAnnotations
+                                        )
+                                        isProcessing = false
+                                        if (result != null) {
+                                            onSave(result)
+                                        } else {
+                                            Toast.makeText(context, "Failed to save annotations", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                enabled = allAnnotations.isNotEmpty(),
+                                modifier = Modifier.padding(end = 4.dp),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
+                            ) {
+                                Text("Save")
+                            }
+                        }
+                    }
                 )
-                Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     FilterChip(
                         selected = selectedTool == AnnotationTool.PEN,
                         onClick = {
                             selectedTool = AnnotationTool.PEN
-                            if (selectedColor.alpha > 0.5f && highlightColors.contains(selectedColor)) {
+                            showToolOptions = true
+                            if (highlightColors.contains(selectedColor)) {
                                 selectedColor = Color.Black
                             }
                         },
                         label = { Text("Pen") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp))
-                        }
+                        leadingIcon = { Icon(Icons.Default.Edit, null, modifier = Modifier.size(16.dp)) }
                     )
                     FilterChip(
                         selected = selectedTool == AnnotationTool.HIGHLIGHTER,
                         onClick = {
                             selectedTool = AnnotationTool.HIGHLIGHTER
+                            showToolOptions = true
                             selectedColor = Color.Yellow
                             strokeWidth = 20f
                         },
                         label = { Text("Highlight") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Highlight, null, modifier = Modifier.size(16.dp))
-                        }
+                        leadingIcon = { Icon(Icons.Default.Highlight, null, modifier = Modifier.size(16.dp)) }
                     )
                     FilterChip(
                         selected = selectedTool == AnnotationTool.ERASER,
-                        onClick = { selectedTool = AnnotationTool.ERASER },
+                        onClick = {
+                            selectedTool = AnnotationTool.ERASER
+                            showToolOptions = false
+                        },
                         label = { Text("Eraser") },
-                        leadingIcon = {
-                            Icon(Icons.Default.CleaningServices, null, modifier = Modifier.size(16.dp))
-                        }
+                        leadingIcon = { Icon(Icons.Default.CleaningServices, null, modifier = Modifier.size(16.dp)) }
                     )
+
+                    Spacer(modifier = Modifier.width(4.dp))
+
+                    if (selectedTool == AnnotationTool.PEN || selectedTool == AnnotationTool.HIGHLIGHTER) {
+                        IconButton(
+                            onClick = { showToolOptions = !showToolOptions },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                if (showToolOptions) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                "Toggle options",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (selectedTool == AnnotationTool.PEN) {
-                    Text("Color:", style = MaterialTheme.typography.labelMedium)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        annotationColors.forEach { color ->
+                if (showToolOptions && selectedTool != AnnotationTool.ERASER) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val colors = if (selectedTool == AnnotationTool.PEN) annotationColors else highlightColors
+                        colors.forEach { color ->
                             Box(
                                 modifier = Modifier
                                     .size(28.dp)
+                                    .padding(2.dp)
                                     .background(color, CircleShape)
                                     .then(
                                         if (selectedColor == color)
@@ -188,54 +255,23 @@ fun AnnotatePdfDialog(
                                     .clickable { selectedColor = color }
                             )
                         }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("${strokeWidth.toInt()}", style = MaterialTheme.typography.labelSmall)
+                        Slider(
+                            value = strokeWidth,
+                            onValueChange = { strokeWidth = it },
+                            valueRange = if (selectedTool == AnnotationTool.PEN) 2f..12f else 10f..40f,
+                            modifier = Modifier.weight(1f)
+                        )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Pen Size: ${strokeWidth.toInt()}", style = MaterialTheme.typography.labelMedium)
-                    Slider(
-                        value = strokeWidth,
-                        onValueChange = { strokeWidth = it },
-                        valueRange = 2f..12f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else if (selectedTool == AnnotationTool.HIGHLIGHTER) {
-                    Text("Highlight Color:", style = MaterialTheme.typography.labelMedium)
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        highlightColors.forEach { color ->
-                            Box(
-                                modifier = Modifier
-                                    .size(28.dp)
-                                    .background(color, CircleShape)
-                                    .then(
-                                        if (selectedColor == color)
-                                            Modifier.border(3.dp, MaterialTheme.colorScheme.primary, CircleShape)
-                                        else
-                                            Modifier.border(1.dp, Color.Gray, CircleShape)
-                                    )
-                                    .clickable {
-                                        selectedColor = color
-                                    }
-                            )
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text("Width: ${strokeWidth.toInt()}", style = MaterialTheme.typography.labelMedium)
-                    Slider(
-                        value = strokeWidth,
-                        onValueChange = { strokeWidth = it },
-                        valueRange = 10f..40f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
 
                 if (pdfBitmap != null) {
                     Box(
                         modifier = Modifier
+                            .weight(1f)
                             .fillMaxWidth()
-                            .height(350.dp)
-                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                            .background(Color(0xFFE0E0E0))
                     ) {
                         Canvas(
                             modifier = Modifier
@@ -357,19 +393,20 @@ fun AnnotatePdfDialog(
                     }
                 } else {
                     Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
                 if (pageCount > 1) {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(
@@ -385,68 +422,6 @@ fun AnnotatePdfDialog(
                         ) {
                             Icon(Icons.Default.ArrowForward, "Next page")
                         }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            allAnnotations[currentPage]?.let {
-                                if (it.isNotEmpty()) it.removeAt(it.lastIndex)
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.Undo, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Undo", maxLines = 1)
-                    }
-                    OutlinedButton(
-                        onClick = { allAnnotations[currentPage]?.clear() },
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Clear", maxLines = 1)
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (isProcessing) {
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Spacer(modifier = Modifier.height(4.dp))
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onDismiss, enabled = !isProcessing) {
-                        Text("Cancel")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Button(
-                        onClick = {
-                            isProcessing = true
-                            scope.launch {
-                                val result = embedAnnotationsInPdf(
-                                    context, pdfFile, allAnnotations
-                                )
-                                isProcessing = false
-                                if (result != null) {
-                                    onSave(result)
-                                } else {
-                                    Toast.makeText(context, "Failed to save annotations", Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                        },
-                        enabled = !isProcessing && allAnnotations.isNotEmpty()
-                    ) {
-                        Text("Save")
                     }
                 }
             }
