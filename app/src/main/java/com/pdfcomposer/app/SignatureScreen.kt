@@ -628,12 +628,12 @@ fun createBitmapFromDrawPoints(points: List<DrawPoint>, width: Int, height: Int)
     val canvas = android.graphics.Canvas(bitmap)
     canvas.drawColor(android.graphics.Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
 
-    val paint = Paint().apply {
+    val paint = android.graphics.Paint().apply {
         color = android.graphics.Color.BLACK
         strokeWidth = 6f
-        style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.ROUND
-        strokeJoin = Paint.Join.ROUND
+        style = android.graphics.Paint.Style.STROKE
+        strokeCap = android.graphics.Paint.Cap.ROUND
+        strokeJoin = android.graphics.Paint.Join.ROUND
         isAntiAlias = true
     }
 
@@ -651,7 +651,7 @@ fun createBitmapFromDrawPoints(points: List<DrawPoint>, width: Int, height: Int)
 }
 
 fun createBitmapFromTypedSignature(name: String, font: CursiveFont): Bitmap {
-    val paint = Paint().apply {
+    val paint = android.graphics.Paint().apply {
         color = android.graphics.Color.rgb(26, 35, 126)
         isAntiAlias = true
         textSize = 80f
@@ -783,7 +783,7 @@ suspend fun embedSignatureInPdf(
                 val sigTop = ((relativeY * pageHeight) - sigH / 2f).toInt()
 
                 val sigRect = android.graphics.Rect(sigLeft, sigTop, sigLeft + sigW, sigTop + sigH)
-                canvas.drawBitmap(signatureBitmap, null, sigRect, Paint().apply { isAntiAlias = true })
+                canvas.drawBitmap(signatureBitmap, null, sigRect, android.graphics.Paint().apply { isAntiAlias = true })
             }
 
             newPdfDocument.finishPage(newPage)
