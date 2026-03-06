@@ -606,6 +606,12 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
     var showCompressDialog by remember { mutableStateOf(false) }
     var showOcrDialog by remember { mutableStateOf(false) }
     var showMergeDialog by remember { mutableStateOf(false) }
+    var showSignatureDialog by remember { mutableStateOf(false) }
+    var showSignPlacement by remember { mutableStateOf(false) }
+    var signatureBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var signPdfFile by remember { mutableStateOf<File?>(null) }
+    var showAnnotateDialog by remember { mutableStateOf(false) }
+    var annotatePdfFile by remember { mutableStateOf<File?>(null) }
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
     
@@ -877,6 +883,49 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                             }
                         }
                     )
+                    
+                    DropdownMenuItem(
+                        text = { Text("Sign Document") },
+                        leadingIcon = { Icon(Icons.Default.Draw, null) },
+                        onClick = {
+                            showMenu = false
+                            showSignatureDialog = true
+                        }
+                    )
+                    
+                    DropdownMenuItem(
+                        text = { Text("Annotate & Draw") },
+                        leadingIcon = { Icon(Icons.Default.Brush, null) },
+                        onClick = {
+                            showMenu = false
+                            scope.launch {
+                                var fileToCleanup: File? = null
+                                try {
+                                    val file = if (document.filePath.startsWith("content://")) {
+                                        StorageUtils.copyUriToTempFile(context, android.net.Uri.parse(document.filePath))
+                                    } else {
+                                        val sourceFile = File(document.filePath)
+                                        if (sourceFile.exists()) {
+                                            val tempFile = File(context.cacheDir, "temp_annotate_${System.currentTimeMillis()}.pdf")
+                                            sourceFile.copyTo(tempFile, overwrite = true)
+                                            tempFile
+                                        } else {
+                                            null
+                                        }
+                                    }
+                                    if (file != null && file.exists()) {
+                                        annotatePdfFile = file
+                                        showAnnotateDialog = true
+                                    } else {
+                                        Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                    }
+                                } catch (e: Exception) {
+                                    fileToCleanup?.delete()
+                                    Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }
@@ -1074,6 +1123,143 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         mergePdfList.forEach { it.second.delete() }
                         mergePdfList.clear()
                         showMergeDialog = false
+                    }
+                }
+            }
+        )
+    }
+    
+    if (showSignatureDialog) {
+        SignDocumentDialog(
+            onDismiss = { showSignatureDialog = false },
+            onSignatureReady = { bitmap ->
+                signatureBitmap = bitmap
+                showSignatureDialog = false
+                scope.launch {
+                    var fileToCleanup: File? = null
+                    try {
+                        val file = if (document.filePath.startsWith("content://")) {
+                            StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                        } else {
+                            val sourceFile = File(document.filePath)
+                            if (sourceFile.exists()) {
+                                val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
+                                sourceFile.copyTo(tempFile, overwrite = true)
+                                tempFile
+                            } else {
+                                null
+                            }
+                        }
+                        if (file != null && file.exists()) {
+                            signPdfFile = file
+                            showSignPlacement = true
+                        } else {
+                            Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                            signatureBitmap = null
+                        }
+                    } catch (e: Exception) {
+                        fileToCleanup?.delete()
+                        Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                        signatureBitmap = null
+                    }
+                }
+            }
+        )
+    }
+    
+    if (showSignPlacement && signPdfFile != null && signatureBitmap != null) {
+        SignPdfScreen(
+            pdfFile = signPdfFile!!,
+            signatureBitmap = signatureBitmap!!,
+            onDismiss = {
+                signPdfFile?.delete()
+                signPdfFile = null
+                signatureBitmap = null
+                showSignPlacement = false
+            },
+            onSigned = { signedFile ->
+                scope.launch {
+                    try {
+                        val savedUri = if (safDirectoryUri != null) {
+                            val folderUri = Uri.parse(safDirectoryUri)
+                            val pdfUri = StorageUtils.createPdfFile(context, folderUri, signedFile.name)
+                            if (pdfUri != null) {
+                                StorageUtils.copyPdfToSaf(context, signedFile, pdfUri)
+                                pdfUri.toString()
+                            } else {
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), signedFile.name)
+                                signedFile.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                        } else {
+                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), signedFile.name)
+                            signedFile.copyTo(appFile, overwrite = true)
+                            appFile.absolutePath
+                        }
+                        
+                        viewModel.addDocument(
+                            signedFile.name,
+                            savedUri,
+                            signedFile.countPages(),
+                            document.category
+                        )
+                        Toast.makeText(context, "Document signed successfully!", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error saving signed PDF: ${e.message}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        signedFile.delete()
+                        signPdfFile?.delete()
+                        signPdfFile = null
+                        signatureBitmap = null
+                        showSignPlacement = false
+                    }
+                }
+            }
+        )
+    }
+    
+    if (showAnnotateDialog && annotatePdfFile != null) {
+        AnnotatePdfDialog(
+            pdfFile = annotatePdfFile!!,
+            onDismiss = {
+                annotatePdfFile?.delete()
+                annotatePdfFile = null
+                showAnnotateDialog = false
+            },
+            onSave = { annotatedFile ->
+                scope.launch {
+                    try {
+                        val savedUri = if (safDirectoryUri != null) {
+                            val folderUri = Uri.parse(safDirectoryUri)
+                            val pdfUri = StorageUtils.createPdfFile(context, folderUri, annotatedFile.name)
+                            if (pdfUri != null) {
+                                StorageUtils.copyPdfToSaf(context, annotatedFile, pdfUri)
+                                pdfUri.toString()
+                            } else {
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), annotatedFile.name)
+                                annotatedFile.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                        } else {
+                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), annotatedFile.name)
+                            annotatedFile.copyTo(appFile, overwrite = true)
+                            appFile.absolutePath
+                        }
+                        
+                        viewModel.addDocument(
+                            annotatedFile.name,
+                            savedUri,
+                            annotatedFile.countPages(),
+                            document.category
+                        )
+                        Toast.makeText(context, "Annotated PDF saved!", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error saving: ${e.message}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        annotatedFile.delete()
+                        annotatePdfFile?.delete()
+                        annotatePdfFile = null
+                        showAnnotateDialog = false
                     }
                 }
             }
@@ -1613,6 +1799,8 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     var showSignPlacement by remember { mutableStateOf(false) }
     var signatureBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var signPdfFile by remember { mutableStateOf<File?>(null) }
+    var showAnnotateDialog by remember { mutableStateOf(false) }
+    var annotatePdfFile by remember { mutableStateOf<File?>(null) }
     
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -1692,6 +1880,22 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         }
     }
     
+    val annotatePdfPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val tempFile = StorageUtils.copyUriToTempFile(context, uri)
+                if (tempFile != null) {
+                    annotatePdfFile = tempFile
+                    showAnnotateDialog = true
+                } else {
+                    Toast.makeText(context, "Failed to open PDF file", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -1743,8 +1947,8 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         ToolCard(
             title = "Annotate & Draw",
             description = "Add notes, highlights, and drawings",
-            icon = Icons.Default.Draw,
-            onClick = { Toast.makeText(context, "Coming soon!", Toast.LENGTH_SHORT).show() }
+            icon = Icons.Default.Brush,
+            onClick = { annotatePdfPicker.launch(arrayOf("application/pdf")) }
         )
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -1990,6 +2194,54 @@ fun ToolsScreen(viewModel: PdfViewModel) {
                     signatureBitmap = null
                     showSignPlacement = false
                     Toast.makeText(context, "Document signed successfully!", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+    
+    if (showAnnotateDialog && annotatePdfFile != null) {
+        AnnotatePdfDialog(
+            pdfFile = annotatePdfFile!!,
+            onDismiss = {
+                annotatePdfFile?.delete()
+                annotatePdfFile = null
+                showAnnotateDialog = false
+            },
+            onSave = { annotatedFile ->
+                scope.launch {
+                    try {
+                        val savedUri = if (safDirectoryUri != null) {
+                            val folderUri = Uri.parse(safDirectoryUri)
+                            val pdfUri = StorageUtils.createPdfFile(context, folderUri, annotatedFile.name)
+                            if (pdfUri != null) {
+                                StorageUtils.copyPdfToSaf(context, annotatedFile, pdfUri)
+                                pdfUri.toString()
+                            } else {
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), annotatedFile.name)
+                                annotatedFile.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                        } else {
+                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), annotatedFile.name)
+                            annotatedFile.copyTo(appFile, overwrite = true)
+                            appFile.absolutePath
+                        }
+                        
+                        viewModel.addDocument(
+                            annotatedFile.name,
+                            savedUri,
+                            annotatedFile.countPages(),
+                            ""
+                        )
+                        Toast.makeText(context, "Annotated PDF saved!", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error saving: ${e.message}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        annotatedFile.delete()
+                        annotatePdfFile?.delete()
+                        annotatePdfFile = null
+                        showAnnotateDialog = false
+                    }
                 }
             }
         )

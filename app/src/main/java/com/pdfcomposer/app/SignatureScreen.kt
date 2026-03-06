@@ -54,6 +54,7 @@ enum class CursiveFont {
 
 data class DrawPoint(val x: Float, val y: Float, val isStart: Boolean)
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignDocumentDialog(
     onDismiss: () -> Unit,
@@ -63,61 +64,85 @@ fun SignDocumentDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create Signature") },
-        text = {
-            Column {
+        modifier = Modifier.fillMaxWidth(0.95f)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(20.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    "Create Signature",
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
                         selected = selectedMethod == SignatureMethod.DRAW,
                         onClick = { selectedMethod = SignatureMethod.DRAW },
-                        label = { Text("Draw", style = MaterialTheme.typography.labelSmall) },
+                        label = { Text("Draw") },
                         leadingIcon = {
-                            if (selectedMethod == SignatureMethod.DRAW)
-                                Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                        },
-                        modifier = Modifier.weight(1f)
+                            Icon(
+                                if (selectedMethod == SignatureMethod.DRAW) Icons.Default.Check else Icons.Default.Draw,
+                                null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     )
                     FilterChip(
                         selected = selectedMethod == SignatureMethod.TYPE,
                         onClick = { selectedMethod = SignatureMethod.TYPE },
-                        label = { Text("Type", style = MaterialTheme.typography.labelSmall) },
+                        label = { Text("Type") },
                         leadingIcon = {
-                            if (selectedMethod == SignatureMethod.TYPE)
-                                Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                        },
-                        modifier = Modifier.weight(1f)
+                            Icon(
+                                if (selectedMethod == SignatureMethod.TYPE) Icons.Default.Check else Icons.Default.Keyboard,
+                                null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     )
                     FilterChip(
                         selected = selectedMethod == SignatureMethod.IMAGE,
                         onClick = { selectedMethod = SignatureMethod.IMAGE },
-                        label = { Text("Upload", style = MaterialTheme.typography.labelSmall) },
+                        label = { Text("Upload") },
                         leadingIcon = {
-                            if (selectedMethod == SignatureMethod.IMAGE)
-                                Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                        },
-                        modifier = Modifier.weight(1f)
+                            Icon(
+                                if (selectedMethod == SignatureMethod.IMAGE) Icons.Default.Check else Icons.Default.Image,
+                                null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
                     )
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 when (selectedMethod) {
                     SignatureMethod.DRAW -> DrawSignaturePanel(onSignatureReady)
                     SignatureMethod.TYPE -> TypeSignaturePanel(onSignatureReady)
                     SignatureMethod.IMAGE -> UploadSignaturePanel(onSignatureReady)
                 }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel")
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Cancel")
+                }
             }
         }
-    )
+    }
 }
 
 @Composable
@@ -136,10 +161,19 @@ fun DrawSignaturePanel(onSignatureReady: (Bitmap) -> Unit) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(150.dp)
+                .heightIn(min = 200.dp)
+                .aspectRatio(2.5f)
                 .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
-                .background(Color.White, RoundedCornerShape(8.dp))
+                .background(Color(0xFFFFFDE7), RoundedCornerShape(8.dp))
         ) {
+            if (points.isEmpty()) {
+                Text(
+                    "Sign here",
+                    modifier = Modifier.align(Alignment.Center),
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color(0x40000000)
+                )
+            }
             Canvas(
                 modifier = Modifier
                     .fillMaxSize()
@@ -165,6 +199,13 @@ fun DrawSignaturePanel(onSignatureReady: (Bitmap) -> Unit) {
                 canvasWidth = size.width.toInt()
                 canvasHeight = size.height.toInt()
 
+                drawLine(
+                    color = Color(0x30000000),
+                    start = Offset(20f, size.height * 0.75f),
+                    end = Offset(size.width - 20f, size.height * 0.75f),
+                    strokeWidth = 1f
+                )
+
                 for (i in 1 until points.size) {
                     if (!points[i].isStart) {
                         drawLine(
@@ -179,16 +220,19 @@ fun DrawSignaturePanel(onSignatureReady: (Bitmap) -> Unit) {
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            OutlinedButton(onClick = { points.clear() }) {
-                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Clear")
+            OutlinedButton(
+                onClick = { points.clear() },
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Clear", maxLines = 1)
             }
             Button(
                 onClick = {
@@ -197,11 +241,12 @@ fun DrawSignaturePanel(onSignatureReady: (Bitmap) -> Unit) {
                         onSignatureReady(bitmap)
                     }
                 },
-                enabled = points.isNotEmpty()
+                enabled = points.isNotEmpty(),
+                modifier = Modifier.weight(1f)
             ) {
-                Icon(Icons.Default.Check, null, modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Use Signature")
+                Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Done", maxLines = 1)
             }
         }
     }
