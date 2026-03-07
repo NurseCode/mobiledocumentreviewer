@@ -338,35 +338,37 @@ fun AnnotatePdfDialog(
                                 }
                                 .pointerInput(selectedTool, selectedColor, strokeWidth, zoomScale, panOffset) {
                                     if (selectedTool == AnnotationTool.ERASER) {
-                                        detectDragGestures(
-                                            onDragStart = { offset ->
-                                                val pageAnnotations = allAnnotations[currentPage]
-                                                if (pageAnnotations != null && pageAnnotations.isNotEmpty()) {
-                                                    val pdfBmp = pdfBitmap ?: return@detectDragGestures
-                                                    val pScale = minOf(
-                                                        size.width.toFloat() / pdfBmp.width.toFloat(),
-                                                        size.height.toFloat() / pdfBmp.height.toFloat()
-                                                    )
-                                                    val pW = pdfBmp.width * pScale
-                                                    val pH = pdfBmp.height * pScale
-                                                    val pLeft = (size.width - pW) / 2f
-                                                    val pTop = (size.height - pH) / 2f
-                                                    val relX = (offset.x - pLeft) / pW
-                                                    val relY = (offset.y - pTop) / pH
+                                        fun eraseAt(pos: Offset) {
+                                            val pageAnnotations = allAnnotations[currentPage]
+                                            if (pageAnnotations != null && pageAnnotations.isNotEmpty()) {
+                                                val pdfBmp = pdfBitmap ?: return
+                                                val pScale = minOf(
+                                                    size.width.toFloat() / pdfBmp.width.toFloat(),
+                                                    size.height.toFloat() / pdfBmp.height.toFloat()
+                                                )
+                                                val pW = pdfBmp.width * pScale
+                                                val pH = pdfBmp.height * pScale
+                                                val pLeft = (size.width - pW) / 2f
+                                                val pTop = (size.height - pH) / 2f
+                                                val relX = (pos.x - pLeft) / pW
+                                                val relY = (pos.y - pTop) / pH
+                                                val threshold = 0.02f
 
-                                                    val iterator = pageAnnotations.iterator()
-                                                    while (iterator.hasNext()) {
-                                                        val stroke = iterator.next()
-                                                        val hit = stroke.points.any { pt ->
-                                                            val dx = pt.x - relX
-                                                            val dy = pt.y - relY
-                                                            (dx * dx + dy * dy) < 0.001f
-                                                        }
-                                                        if (hit) iterator.remove()
+                                                val iterator = pageAnnotations.iterator()
+                                                while (iterator.hasNext()) {
+                                                    val stroke = iterator.next()
+                                                    val hit = stroke.points.any { pt ->
+                                                        val dx = pt.x - relX
+                                                        val dy = pt.y - relY
+                                                        (dx * dx + dy * dy) < (threshold * threshold)
                                                     }
+                                                    if (hit) iterator.remove()
                                                 }
-                                            },
-                                            onDrag = { _, _ -> }
+                                            }
+                                        }
+                                        detectDragGestures(
+                                            onDragStart = { offset -> eraseAt(offset) },
+                                            onDrag = { change, _ -> eraseAt(change.position) }
                                         )
                                     } else {
                                         detectDragGestures(
