@@ -14,6 +14,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -28,7 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -87,6 +93,9 @@ fun AnnotatePdfDialog(
     var strokeWidth by remember { mutableStateOf(4f) }
     var isProcessing by remember { mutableStateOf(false) }
     var showToolOptions by remember { mutableStateOf(false) }
+
+    var zoomScale by remember { mutableStateOf(1f) }
+    var panOffset by remember { mutableStateOf(Offset.Zero) }
 
     val allAnnotations = remember { mutableStateMapOf<Int, MutableList<AnnotationStroke>>() }
     val currentPoints = remember { mutableStateListOf<Offset>() }
@@ -229,6 +238,25 @@ fun AnnotatePdfDialog(
                             )
                         }
                     }
+
+                    Spacer(modifier = Modifier.weight(1f))
+
+                    if (zoomScale > 1.05f) {
+                        Text(
+                            "${(zoomScale * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        IconButton(
+                            onClick = {
+                                zoomScale = 1f
+                                panOffset = Offset.Zero
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(Icons.Default.ZoomOut, "Reset zoom", modifier = Modifier.size(20.dp))
+                        }
+                    }
                 }
 
                 if (showToolOptions && selectedTool != AnnotationTool.ERASER) {
@@ -272,11 +300,43 @@ fun AnnotatePdfDialog(
                             .weight(1f)
                             .fillMaxWidth()
                             .background(Color(0xFFE0E0E0))
+                            .clipToBounds()
+                            .pointerInput(Unit) {
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    while (true) {
+                                        val event = awaitPointerEvent()
+                                        if (event.changes.none { it.pressed }) break
+                                        if (event.changes.size >= 2) {
+                                            val zoom = event.calculateZoom()
+                                            val pan = event.calculatePan()
+                                            zoomScale = (zoomScale * zoom).coerceIn(1f, 5f)
+                                            panOffset = Offset(
+                                                (panOffset.x + pan.x).coerceIn(
+                                                    -size.width * (zoomScale - 1) / 2f,
+                                                    size.width * (zoomScale - 1) / 2f
+                                                ),
+                                                (panOffset.y + pan.y).coerceIn(
+                                                    -size.height * (zoomScale - 1) / 2f,
+                                                    size.height * (zoomScale - 1) / 2f
+                                                )
+                                            )
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    }
+                                }
+                            }
                     ) {
                         Canvas(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .pointerInput(selectedTool, selectedColor, strokeWidth) {
+                                .graphicsLayer {
+                                    scaleX = zoomScale
+                                    scaleY = zoomScale
+                                    translationX = panOffset.x
+                                    translationY = panOffset.y
+                                }
+                                .pointerInput(selectedTool, selectedColor, strokeWidth, zoomScale, panOffset) {
                                     if (selectedTool == AnnotationTool.ERASER) {
                                         detectDragGestures(
                                             onDragStart = { offset ->

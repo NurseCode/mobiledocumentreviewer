@@ -21,6 +21,8 @@ The application is built with Kotlin and utilizes Jetpack Compose with Material 
 - **Material 3 Theming**: Consistent and modern visual design.
 - **Advanced Crop Tool**: Uses ImageCropView library (v3.1.1) with rule-of-thirds grid, rotation support, aspect ratio toggle (free-style/square), and dark theme UI.
 - **PDF Viewer**: Includes pinch-to-zoom and pan functionality for improved readability.
+- **PDF Thumbnails**: Home screen document cards show a rendered preview of the first page.
+- **Annotation Zoom**: Pinch-to-zoom and two-finger pan in the annotate screen for precise drawing/highlighting.
 - **Navigation**: Uses NavigationBar and NavigationRail with proper text wrapping for usability.
 - **Settings Screen**: Comprehensive settings for storage, quality, OCR language, theme, and sorting.
 - **Folder/Category Organization**: Supports document categorization and real-time search with filter chips.
@@ -39,7 +41,7 @@ The application is built with Kotlin and utilizes Jetpack Compose with Material 
   - **Split PDF**: Extract specific page ranges (e.g., "1-3, 5-7") into separate PDF files
   - **OCR Text Extract**: Render PDF pages, run ML Kit OCR, display extracted text with clipboard copy
   - **Compress PDF**: Quality selection dialog (placeholder - copies file without compression, real implementation deferred)
-  - **Sign Document**: Three signature methods - finger draw, typed cursive font (4 styles), and photo upload. Includes drag-to-position placement with resize slider and multi-page navigation.
+  - **Sign Document**: Three signature methods - finger draw (full-screen landscape pad), typed cursive font (4 styles), and photo upload. Includes drag-to-position placement with resize slider and multi-page navigation.
   - **Annotate & Draw**: Pen tool with 7 colors and adjustable size, highlighter with 5 colors and adjustable width, eraser tool. Supports undo and clear per page. Multi-page navigation.
 - **Document Management**: Features include naming dialogs with OCR suggestions, rename, delete, and category management via overflow menus. All tools (split, compress, OCR, merge, sign, annotate) accessible from document overflow menu on Home screen.
 - **Database**: Room v2 includes `PdfDocument` entity with category support and `Bookmark` entity.

@@ -17,7 +17,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -32,8 +35,10 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
@@ -592,6 +597,65 @@ fun HomeScreen(viewModel: PdfViewModel, onViewDocument: (StoredPdfDocument) -> U
     }
 }
 
+@Composable
+fun PdfThumbnail(filePath: String, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    var thumbnail by remember(filePath) { mutableStateOf<Bitmap?>(null) }
+    var failed by remember(filePath) { mutableStateOf(false) }
+
+    LaunchedEffect(filePath) {
+        withContext(Dispatchers.IO) {
+            try {
+                val fd = if (filePath.startsWith("content://")) {
+                    context.contentResolver.openFileDescriptor(Uri.parse(filePath), "r")
+                } else {
+                    val file = File(filePath)
+                    if (file.exists()) ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY) else null
+                }
+                if (fd != null) {
+                    val renderer = PdfRenderer(fd)
+                    if (renderer.pageCount > 0) {
+                        val page = renderer.openPage(0)
+                        val thumbWidth = 150
+                        val scale = thumbWidth.toFloat() / page.width.coerceAtLeast(1)
+                        val w = (page.width * scale).toInt().coerceAtLeast(1)
+                        val h = (page.height * scale).toInt().coerceAtLeast(1)
+                        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                        bmp.eraseColor(android.graphics.Color.WHITE)
+                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                        page.close()
+                        thumbnail = bmp
+                    }
+                    renderer.close()
+                    fd.close()
+                } else {
+                    failed = true
+                }
+            } catch (_: Exception) {
+                failed = true
+            }
+        }
+    }
+
+    if (thumbnail != null) {
+        Image(
+            bitmap = thumbnail!!.asImageBitmap(),
+            contentDescription = "PDF preview",
+            modifier = modifier
+                .clip(RoundedCornerShape(6.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp)),
+            contentScale = ContentScale.Crop
+        )
+    } else {
+        Icon(
+            Icons.Default.PictureAsPdf,
+            contentDescription = null,
+            modifier = modifier,
+            tint = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: () -> Unit = {}) {
@@ -639,13 +703,11 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                Icons.Default.PictureAsPdf,
-                contentDescription = null,
-                modifier = Modifier.size(48.dp),
-                tint = MaterialTheme.colorScheme.primary
+            PdfThumbnail(
+                filePath = document.filePath,
+                modifier = Modifier.size(56.dp)
             )
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = document.fileName,
