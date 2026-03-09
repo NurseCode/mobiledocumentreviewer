@@ -270,6 +270,7 @@ fun MainScreen(viewModel: PdfViewModel) {
     
     var fullScreenDrawActive by rememberSaveable { mutableStateOf(false) }
     var signatureBitmapResult by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var signatureBitmapConsumed by remember { mutableStateOf(false) }
     
     // Check onboarding status on launch
     LaunchedEffect(hasCompletedOnboarding) {
@@ -309,9 +310,15 @@ fun MainScreen(viewModel: PdfViewModel) {
     
     Box(modifier = Modifier.fillMaxSize()) {
     CompositionLocalProvider(
-        LocalOpenSigningPad provides { fullScreenDrawActive = true },
-        LocalSignatureBitmapResult provides signatureBitmapResult,
-        LocalConsumeSignatureResult provides { signatureBitmapResult = null }
+        LocalOpenSigningPad provides {
+            signatureBitmapResult = null
+            signatureBitmapConsumed = false
+            fullScreenDrawActive = true
+        },
+        LocalSignatureBitmapResult provides (if (signatureBitmapConsumed) null else signatureBitmapResult),
+        LocalConsumeSignatureResult provides {
+            signatureBitmapConsumed = true
+        }
     ) {
     Scaffold(
         topBar = {
@@ -1223,8 +1230,8 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
         )
     }
     
-    LaunchedEffect(signatureFromPad, awaitingSignatureFromPad) {
-        if (awaitingSignatureFromPad && signatureFromPad != null) {
+    if (awaitingSignatureFromPad && signatureFromPad != null) {
+        LaunchedEffect(Unit) {
             awaitingSignatureFromPad = false
             signatureBitmap = signatureFromPad
             consumeSignatureResult?.invoke()
@@ -2275,8 +2282,8 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         )
     }
     
-    LaunchedEffect(signatureFromPad, awaitingSignatureFromPad) {
-        if (awaitingSignatureFromPad && signatureFromPad != null) {
+    if (awaitingSignatureFromPad && signatureFromPad != null) {
+        LaunchedEffect(Unit) {
             awaitingSignatureFromPad = false
             signatureBitmap = signatureFromPad
             consumeSignatureResult?.invoke()

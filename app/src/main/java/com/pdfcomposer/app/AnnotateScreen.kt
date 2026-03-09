@@ -347,13 +347,6 @@ fun AnnotatePdfDialog(
                                         val pTop = if (pH < size.height) (size.height - pH) / 2f else 0f
                                         return floatArrayOf(pLeft, pTop, pW, pH)
                                     }
-                                    fun transformTouch(pos: Offset): Offset {
-                                        val cx = size.width / 2f
-                                        val cy = size.height / 2f
-                                        val x = (pos.x - cx - panOffset.x) / zoomScale + cx
-                                        val y = (pos.y - cy - panOffset.y) / zoomScale + cy
-                                        return Offset(x, y)
-                                    }
                                     if (selectedTool == AnnotationTool.ERASER) {
                                         fun eraseAt(pos: Offset) {
                                             val pageAnnotations = allAnnotations[currentPage]
@@ -361,20 +354,19 @@ fun AnnotatePdfDialog(
                                                 val geom = calcPageGeometry() ?: return
                                                 val pLeft = geom[0]; val pTop = geom[1]
                                                 val pW = geom[2]; val pH = geom[3]
-                                                val transformed = transformTouch(pos)
-                                                val relX = (transformed.x - pLeft) / pW
-                                                val relY = (transformed.y - pTop) / pH
+                                                val relX = (pos.x - pLeft) / pW
+                                                val relY = (pos.y - pTop) / pH
                                                 val threshold = 0.03f
 
-                                                val iterator = pageAnnotations.iterator()
-                                                while (iterator.hasNext()) {
-                                                    val stroke = iterator.next()
-                                                    val hit = stroke.points.any { pt ->
+                                                val filtered = pageAnnotations.filter { stroke ->
+                                                    !stroke.points.any { pt ->
                                                         val dx = pt.x - relX
                                                         val dy = pt.y - relY
                                                         (dx * dx + dy * dy) < (threshold * threshold)
                                                     }
-                                                    if (hit) iterator.remove()
+                                                }
+                                                if (filtered.size != pageAnnotations.size) {
+                                                    allAnnotations[currentPage] = filtered.toMutableList()
                                                 }
                                             }
                                         }
@@ -389,18 +381,16 @@ fun AnnotatePdfDialog(
                                                 val geom = calcPageGeometry() ?: return@detectDragGestures
                                                 val pLeft = geom[0]; val pTop = geom[1]
                                                 val pW = geom[2]; val pH = geom[3]
-                                                val transformed = transformTouch(offset)
-                                                val relX = ((transformed.x - pLeft) / pW).coerceIn(0f, 1f)
-                                                val relY = ((transformed.y - pTop) / pH).coerceIn(0f, 1f)
+                                                val relX = ((offset.x - pLeft) / pW).coerceIn(0f, 1f)
+                                                val relY = ((offset.y - pTop) / pH).coerceIn(0f, 1f)
                                                 currentPoints.add(Offset(relX, relY))
                                             },
                                             onDrag = { change, _ ->
                                                 val geom = calcPageGeometry() ?: return@detectDragGestures
                                                 val pLeft = geom[0]; val pTop = geom[1]
                                                 val pW = geom[2]; val pH = geom[3]
-                                                val transformed = transformTouch(change.position)
-                                                val relX = ((transformed.x - pLeft) / pW).coerceIn(0f, 1f)
-                                                val relY = ((transformed.y - pTop) / pH).coerceIn(0f, 1f)
+                                                val relX = ((change.position.x - pLeft) / pW).coerceIn(0f, 1f)
+                                                val relY = ((change.position.y - pTop) / pH).coerceIn(0f, 1f)
                                                 currentPoints.add(Offset(relX, relY))
                                             },
                                             onDragEnd = {
