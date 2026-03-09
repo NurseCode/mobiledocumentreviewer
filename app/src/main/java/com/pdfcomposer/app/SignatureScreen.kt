@@ -13,6 +13,7 @@ import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
@@ -45,8 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,18 +66,10 @@ data class DrawPoint(val x: Float, val y: Float, val isStart: Boolean)
 @Composable
 fun SignDocumentDialog(
     onDismiss: () -> Unit,
-    onSignatureReady: (Bitmap) -> Unit
+    onSignatureReady: (Bitmap) -> Unit,
+    onOpenFullScreenDraw: () -> Unit = {}
 ) {
     var selectedMethod by rememberSaveable { mutableStateOf(SignatureMethod.DRAW) }
-    var showFullScreenDraw by rememberSaveable { mutableStateOf(false) }
-
-    if (showFullScreenDraw) {
-        FullScreenDrawSignature(
-            onDismiss = { showFullScreenDraw = false },
-            onSignatureReady = onSignatureReady
-        )
-        return
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -152,7 +143,7 @@ fun SignDocumentDialog(
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
-                            onClick = { showFullScreenDraw = true },
+                            onClick = onOpenFullScreenDraw,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Icon(Icons.Default.Draw, null, modifier = Modifier.size(20.dp))
@@ -183,108 +174,104 @@ fun FullScreenDrawSignature(
     onDismiss: () -> Unit,
     onSignatureReady: (Bitmap) -> Unit
 ) {
-    val context = LocalContext.current
     val points = remember { mutableStateListOf<DrawPoint>() }
     var canvasWidth by remember { mutableStateOf(0) }
     var canvasHeight by remember { mutableStateOf(0) }
 
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+    BackHandler { onDismiss() }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.surface
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                TopAppBar(
-                    title = { Text("Sign Your Name") },
-                    navigationIcon = {
-                        IconButton(onClick = onDismiss) {
-                            Icon(Icons.Default.Close, "Cancel")
-                        }
-                    },
-                    actions = {
-                        TextButton(onClick = { points.clear() }) {
-                            Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Clear")
-                        }
-                        Button(
-                            onClick = {
-                                if (points.isNotEmpty() && canvasWidth > 0 && canvasHeight > 0) {
-                                    val bitmap = createBitmapFromDrawPoints(points, canvasWidth, canvasHeight)
-                                    onSignatureReady(bitmap)
-                                }
-                            },
-                            enabled = points.isNotEmpty(),
-                            modifier = Modifier.padding(end = 8.dp)
-                        ) {
-                            Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Done")
-                        }
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = { Text("Sign Your Name") },
+                navigationIcon = {
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, "Cancel")
                     }
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                        .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-                        .background(Color(0xFFFFFDE7), RoundedCornerShape(12.dp))
-                ) {
-                    if (points.isEmpty()) {
-                        Text(
-                            "Sign here",
-                            modifier = Modifier.align(Alignment.Center),
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = Color(0x30000000)
-                        )
+                },
+                actions = {
+                    TextButton(onClick = { points.clear() }) {
+                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Clear")
                     }
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .pointerInput(Unit) {
-                                canvasWidth = size.width
-                                canvasHeight = size.height
-                                detectDragGestures(
-                                    onDragStart = { offset ->
-                                        points.add(DrawPoint(offset.x, offset.y, true))
-                                    },
-                                    onDrag = { change, _ ->
-                                        points.add(
-                                            DrawPoint(
-                                                change.position.x,
-                                                change.position.y,
-                                                false
-                                            )
-                                        )
-                                    }
-                                )
+                    Button(
+                        onClick = {
+                            if (points.isNotEmpty() && canvasWidth > 0 && canvasHeight > 0) {
+                                val bitmap = createBitmapFromDrawPoints(points, canvasWidth, canvasHeight)
+                                onSignatureReady(bitmap)
                             }
+                        },
+                        enabled = points.isNotEmpty(),
+                        modifier = Modifier.padding(end = 8.dp)
                     ) {
-                        canvasWidth = size.width.toInt()
-                        canvasHeight = size.height.toInt()
+                        Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Done")
+                    }
+                }
+            )
 
-                        drawLine(
-                            color = Color(0x30000000),
-                            start = Offset(40f, size.height * 0.75f),
-                            end = Offset(size.width - 40f, size.height * 0.75f),
-                            strokeWidth = 1.5f
-                        )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .border(2.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+                    .background(Color(0xFFFFFDE7), RoundedCornerShape(12.dp))
+            ) {
+                if (points.isEmpty()) {
+                    Text(
+                        "Sign here",
+                        modifier = Modifier.align(Alignment.Center),
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = Color(0x30000000)
+                    )
+                }
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            canvasWidth = size.width
+                            canvasHeight = size.height
+                            detectDragGestures(
+                                onDragStart = { offset ->
+                                    points.add(DrawPoint(offset.x, offset.y, true))
+                                },
+                                onDrag = { change, _ ->
+                                    points.add(
+                                        DrawPoint(
+                                            change.position.x,
+                                            change.position.y,
+                                            false
+                                        )
+                                    )
+                                }
+                            )
+                        }
+                ) {
+                    canvasWidth = size.width.toInt()
+                    canvasHeight = size.height.toInt()
 
-                        for (i in 1 until points.size) {
-                            if (!points[i].isStart) {
-                                drawLine(
-                                    color = Color.Black,
-                                    start = Offset(points[i - 1].x, points[i - 1].y),
-                                    end = Offset(points[i].x, points[i].y),
-                                    strokeWidth = 4f,
-                                    cap = StrokeCap.Round
-                                )
-                            }
+                    drawLine(
+                        color = Color(0x30000000),
+                        start = Offset(40f, size.height * 0.75f),
+                        end = Offset(size.width - 40f, size.height * 0.75f),
+                        strokeWidth = 1.5f
+                    )
+
+                    for (i in 1 until points.size) {
+                        if (!points[i].isStart) {
+                            drawLine(
+                                color = Color.Black,
+                                start = Offset(points[i - 1].x, points[i - 1].y),
+                                end = Offset(points[i].x, points[i].y),
+                                strokeWidth = 4f,
+                                cap = StrokeCap.Round
+                            )
                         }
                     }
                 }

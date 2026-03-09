@@ -249,6 +249,12 @@ fun dynamicColorScheme(): ColorScheme {
     )
 }
 
+data class FullScreenDrawRequest(
+    val onSignatureReady: (android.graphics.Bitmap) -> Unit
+)
+
+val LocalFullScreenDrawRequest = compositionLocalOf<((FullScreenDrawRequest) -> Unit)?> { null }
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: PdfViewModel) {
@@ -258,11 +264,14 @@ fun MainScreen(viewModel: PdfViewModel) {
     val safDirectoryUri by settingsManager.safDirectoryUriFlow.collectAsState(initial = null)
     
     var showOnboarding by remember { mutableStateOf(false) }
-    var selectedScreen by remember { mutableStateOf(Screen.Home) }
+    var selectedScreen by rememberSaveable { mutableStateOf(Screen.Home) }
     var viewingDocument by remember { mutableStateOf<StoredPdfDocument?>(null) }
     val configuration = LocalConfiguration.current
     val isTablet = configuration.screenWidthDp > 600
     val scope = rememberCoroutineScope()
+    
+    var fullScreenDrawActive by rememberSaveable { mutableStateOf(false) }
+    var fullScreenDrawCallback by remember { mutableStateOf<((android.graphics.Bitmap) -> Unit)?>(null) }
     
     // Check onboarding status on launch
     LaunchedEffect(hasCompletedOnboarding) {
@@ -300,6 +309,13 @@ fun MainScreen(viewModel: PdfViewModel) {
         return
     }
     
+    Box(modifier = Modifier.fillMaxSize()) {
+    CompositionLocalProvider(
+        LocalFullScreenDrawRequest provides { request ->
+            fullScreenDrawCallback = request.onSignatureReady
+            fullScreenDrawActive = true
+        }
+    ) {
     Scaffold(
         topBar = {
             TopAppBar(
@@ -409,6 +425,22 @@ fun MainScreen(viewModel: PdfViewModel) {
             }
         }
     }
+    } // CompositionLocalProvider
+    
+    if (fullScreenDrawActive) {
+        FullScreenDrawSignature(
+            onDismiss = {
+                fullScreenDrawActive = false
+                fullScreenDrawCallback = null
+            },
+            onSignatureReady = { bitmap ->
+                fullScreenDrawCallback?.invoke(bitmap)
+                fullScreenDrawActive = false
+                fullScreenDrawCallback = null
+            }
+        )
+    }
+    } // Box
 }
 
 @Composable
@@ -679,6 +711,7 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
     var annotatePdfFile by remember { mutableStateOf<File?>(null) }
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
+    val requestFullScreenDraw = LocalFullScreenDrawRequest.current
     
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -1193,40 +1226,45 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
     }
     
     if (showSignatureDialog) {
-        SignDocumentDialog(
-            onDismiss = { showSignatureDialog = false },
-            onSignatureReady = { bitmap ->
-                signatureBitmap = bitmap
-                showSignatureDialog = false
-                scope.launch {
-                    var fileToCleanup: File? = null
-                    try {
-                        val file = if (document.filePath.startsWith("content://")) {
-                            StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+        val handleSignatureReady: (android.graphics.Bitmap) -> Unit = { bitmap ->
+            signatureBitmap = bitmap
+            showSignatureDialog = false
+            scope.launch {
+                var fileToCleanup: File? = null
+                try {
+                    val file = if (document.filePath.startsWith("content://")) {
+                        StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                    } else {
+                        val sourceFile = File(document.filePath)
+                        if (sourceFile.exists()) {
+                            val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
+                            sourceFile.copyTo(tempFile, overwrite = true)
+                            tempFile
                         } else {
-                            val sourceFile = File(document.filePath)
-                            if (sourceFile.exists()) {
-                                val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
-                                sourceFile.copyTo(tempFile, overwrite = true)
-                                tempFile
-                            } else {
-                                null
-                            }
+                            null
                         }
-                        if (file != null && file.exists()) {
-                            signPdfFile = file
-                            showSignPlacement = true
-                        } else {
-                            Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
-                            signatureBitmap = null
-                        }
-                    } catch (e: Exception) {
-                        fileToCleanup?.delete()
-                        Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                    if (file != null && file.exists()) {
+                        signPdfFile = file
+                        showSignPlacement = true
+                    } else {
+                        Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
                         signatureBitmap = null
                     }
+                } catch (e: Exception) {
+                    fileToCleanup?.delete()
+                    Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                    signatureBitmap = null
                 }
             }
+        }
+        SignDocumentDialog(
+            onDismiss = { showSignatureDialog = false },
+            onOpenFullScreenDraw = {
+                showSignatureDialog = false
+                requestFullScreenDraw?.invoke(FullScreenDrawRequest(handleSignatureReady))
+            },
+            onSignatureReady = handleSignatureReady
         )
     }
     
@@ -1864,6 +1902,7 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     var signPdfFile by remember { mutableStateOf<File?>(null) }
     var showAnnotateDialog by rememberSaveable { mutableStateOf(false) }
     var annotatePdfFile by remember { mutableStateOf<File?>(null) }
+    val requestFullScreenDraw = LocalFullScreenDrawRequest.current
     
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -2206,13 +2245,18 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     }
     
     if (showSignatureDialog) {
+        val handleSignatureReady: (android.graphics.Bitmap) -> Unit = { bitmap ->
+            signatureBitmap = bitmap
+            showSignatureDialog = false
+            signPdfPicker.launch(arrayOf("application/pdf"))
+        }
         SignDocumentDialog(
             onDismiss = { showSignatureDialog = false },
-            onSignatureReady = { bitmap ->
-                signatureBitmap = bitmap
+            onOpenFullScreenDraw = {
                 showSignatureDialog = false
-                signPdfPicker.launch(arrayOf("application/pdf"))
-            }
+                requestFullScreenDraw?.invoke(FullScreenDrawRequest(handleSignatureReady))
+            },
+            onSignatureReady = handleSignatureReady
         )
     }
     

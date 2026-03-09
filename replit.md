@@ -41,7 +41,7 @@ The application is built with Kotlin and utilizes Jetpack Compose with Material 
   - **Split PDF**: Extract specific page ranges (e.g., "1-3, 5-7") into separate PDF files
   - **OCR Text Extract**: Render PDF pages, run ML Kit OCR, display extracted text with clipboard copy
   - **Compress PDF**: Quality selection dialog (placeholder - copies file without compression, real implementation deferred)
-  - **Sign Document**: Three signature methods - finger draw (full-screen landscape pad), typed cursive font (4 styles), and photo upload. Includes drag-to-position placement with resize slider and multi-page navigation.
+  - **Sign Document**: Three signature methods - finger draw (full-screen pad via top-level overlay), typed cursive font (4 styles), and photo upload. Full-screen draw pad rendered at MainScreen level via `LocalFullScreenDrawRequest` CompositionLocal to survive screen rotation. Includes drag-to-position placement with resize slider and multi-page navigation.
   - **Annotate & Draw**: Pen tool with 7 colors and adjustable size, highlighter with 5 colors and adjustable width, eraser tool. Supports undo and clear per page. Multi-page navigation.
 - **Document Management**: Features include naming dialogs with OCR suggestions, rename, delete, and category management via overflow menus. All tools (split, compress, OCR, merge, sign, annotate) accessible from document overflow menu on Home screen.
 - **Database**: Room v2 includes `PdfDocument` entity with category support and `Bookmark` entity.
