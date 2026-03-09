@@ -187,15 +187,6 @@ fun FullScreenDrawSignature(
     var canvasWidth by remember { mutableStateOf(0) }
     var canvasHeight by remember { mutableStateOf(0) }
 
-    val activity = context as? Activity
-    DisposableEffect(Unit) {
-        val originalOrientation = activity?.requestedOrientation
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-        onDispose {
-            activity?.requestedOrientation = originalOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
-        }
-    }
-
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
