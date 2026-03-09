@@ -37,6 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -488,6 +489,8 @@ fun SignPdfScreen(
     var sigY by remember { mutableStateOf(0.8f) }
     var sigScale by remember { mutableStateOf(0.25f) }
     var isProcessing by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
 
     LaunchedEffect(pdfFile, currentPage) {
         withContext(Dispatchers.IO) {
@@ -512,159 +515,219 @@ fun SignPdfScreen(
         }
     }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Place Signature on Page ${currentPage + 1}") },
-        text = {
-            Column {
-                if (pdfBitmap != null) {
-                    Text(
-                        "Drag to position. Use slider to resize.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
+    BackHandler { if (!isProcessing) onDismiss() }
 
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(350.dp)
-                            .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
-                    ) {
-                        Canvas(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .pointerInput(Unit) {
-                                    detectDragGestures { change, _ ->
-                                        val pdfBmp = pdfBitmap ?: return@detectDragGestures
-                                        val pScale = minOf(
-                                            size.width.toFloat() / pdfBmp.width.toFloat(),
-                                            size.height.toFloat() / pdfBmp.height.toFloat()
-                                        )
-                                        val pW = pdfBmp.width * pScale
-                                        val pH = pdfBmp.height * pScale
-                                        val pLeft = (size.width - pW) / 2f
-                                        val pTop = (size.height - pH) / 2f
-                                        sigX = ((change.position.x - pLeft) / pW).coerceIn(0f, 1f)
-                                        sigY = ((change.position.y - pTop) / pH).coerceIn(0f, 1f)
-                                    }
-                                }
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = { Text("Place Signature - Page ${currentPage + 1}") },
+                navigationIcon = {
+                    IconButton(onClick = onDismiss, enabled = !isProcessing) {
+                        Icon(Icons.Default.Close, "Cancel")
+                    }
+                },
+                actions = {
+                    if (pageCount > 1) {
+                        IconButton(
+                            onClick = { if (currentPage > 0) currentPage-- },
+                            enabled = currentPage > 0
                         ) {
-                            val pdfBmp = pdfBitmap!!
-                            val pageScale = minOf(
-                                size.width / pdfBmp.width.toFloat(),
-                                size.height / pdfBmp.height.toFloat()
-                            )
-                            val pageW = pdfBmp.width * pageScale
-                            val pageH = pdfBmp.height * pageScale
-                            val pageLeft = (size.width - pageW) / 2f
-                            val pageTop = (size.height - pageH) / 2f
-
-                            drawImage(
-                                image = pdfBmp.asImageBitmap(),
-                                dstOffset = androidx.compose.ui.unit.IntOffset(pageLeft.toInt(), pageTop.toInt()),
-                                dstSize = androidx.compose.ui.unit.IntSize(pageW.toInt(), pageH.toInt())
-                            )
-
-                            val sigW = pageW * sigScale
-                            val sigH = sigW * (signatureBitmap.height.toFloat() / signatureBitmap.width.toFloat())
-                            val sigLeft = pageLeft + (sigX * pageW) - (sigW / 2f)
-                            val sigTop = pageTop + (sigY * pageH) - (sigH / 2f)
-
-                            drawImage(
-                                image = signatureBitmap.asImageBitmap(),
-                                dstOffset = androidx.compose.ui.unit.IntOffset(sigLeft.toInt(), sigTop.toInt()),
-                                dstSize = androidx.compose.ui.unit.IntSize(sigW.toInt(), sigH.toInt())
-                            )
-
-                            drawRect(
-                                color = Color(0x400000FF),
-                                topLeft = Offset(sigLeft, sigTop),
-                                size = androidx.compose.ui.geometry.Size(sigW, sigH),
-                                style = Stroke(width = 2f)
-                            )
+                            Icon(Icons.Default.ArrowBack, "Previous page")
+                        }
+                        Text(
+                            "${currentPage + 1}/$pageCount",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(horizontal = 4.dp)
+                        )
+                        IconButton(
+                            onClick = { if (currentPage < pageCount - 1) currentPage++ },
+                            enabled = currentPage < pageCount - 1
+                        ) {
+                            Icon(Icons.Default.ArrowForward, "Next page")
                         }
                     }
+                    Button(
+                        onClick = {
+                            isProcessing = true
+                            scope.launch {
+                                val result = embedSignatureInPdf(
+                                    context, pdfFile, signatureBitmap,
+                                    currentPage, sigX, sigY, sigScale
+                                )
+                                isProcessing = false
+                                if (result != null) {
+                                    onSigned(result)
+                                } else {
+                                    Toast.makeText(context, "Failed to sign PDF", Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        },
+                        enabled = pdfBitmap != null && !isProcessing,
+                        modifier = Modifier.padding(end = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Sign PDF")
+                    }
+                }
+            )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+            if (isProcessing) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            }
 
-                    Text("Signature Size:", style = MaterialTheme.typography.bodySmall)
-                    Slider(
-                        value = sigScale,
-                        onValueChange = { sigScale = it },
-                        valueRange = 0.1f..0.5f,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (pageCount > 1) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+            if (pdfBitmap != null) {
+                if (isLandscape) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
                         ) {
-                            IconButton(
-                                onClick = { if (currentPage > 0) currentPage-- },
-                                enabled = currentPage > 0
-                            ) {
-                                Icon(Icons.Default.ArrowBack, "Previous page")
-                            }
-                            Text("Page ${currentPage + 1} of $pageCount")
-                            IconButton(
-                                onClick = { if (currentPage < pageCount - 1) currentPage++ },
-                                enabled = currentPage < pageCount - 1
-                            ) {
-                                Icon(Icons.Default.ArrowForward, "Next page")
-                            }
+                            SignaturePlacementCanvas(
+                                pdfBitmap = pdfBitmap!!,
+                                signatureBitmap = signatureBitmap,
+                                sigX = sigX,
+                                sigY = sigY,
+                                sigScale = sigScale,
+                                onPositionChange = { x, y -> sigX = x; sigY = y }
+                            )
+                        }
+                        Column(
+                            modifier = Modifier
+                                .width(160.dp)
+                                .fillMaxHeight()
+                                .padding(start = 12.dp),
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text("Drag on the page to position your signature.", style = MaterialTheme.typography.bodySmall)
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("Size:", style = MaterialTheme.typography.bodySmall)
+                            Slider(
+                                value = sigScale,
+                                onValueChange = { sigScale = it },
+                                valueRange = 0.1f..0.5f
+                            )
                         }
                     }
                 } else {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        contentAlignment = Alignment.Center
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 12.dp, vertical = 4.dp)
                     ) {
-                        CircularProgressIndicator()
-                    }
-                }
-
-                if (isProcessing) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    Text(
-                        "Embedding signature...",
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    isProcessing = true
-                    scope.launch {
-                        val result = embedSignatureInPdf(
-                            context, pdfFile, signatureBitmap,
-                            currentPage, sigX, sigY, sigScale
+                        Text(
+                            "Drag on the page to position your signature.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
                         )
-                        isProcessing = false
-                        if (result != null) {
-                            onSigned(result)
-                        } else {
-                            Toast.makeText(context, "Failed to sign PDF", Toast.LENGTH_SHORT).show()
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxWidth()
+                                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(4.dp))
+                        ) {
+                            SignaturePlacementCanvas(
+                                pdfBitmap = pdfBitmap!!,
+                                signatureBitmap = signatureBitmap,
+                                sigX = sigX,
+                                sigY = sigY,
+                                sigScale = sigScale,
+                                onPositionChange = { x, y -> sigX = x; sigY = y }
+                            )
                         }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Signature Size:", style = MaterialTheme.typography.bodySmall)
+                        Slider(
+                            value = sigScale,
+                            onValueChange = { sigScale = it },
+                            valueRange = 0.1f..0.5f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
                     }
-                },
-                enabled = pdfBitmap != null && !isProcessing
-            ) {
-                Text("Sign PDF")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss, enabled = !isProcessing) {
-                Text("Cancel")
+                }
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
             }
         }
-    )
+    }
+}
+
+@Composable
+private fun SignaturePlacementCanvas(
+    pdfBitmap: Bitmap,
+    signatureBitmap: Bitmap,
+    sigX: Float,
+    sigY: Float,
+    sigScale: Float,
+    onPositionChange: (Float, Float) -> Unit
+) {
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectDragGestures { change, _ ->
+                    val pScale = minOf(
+                        size.width.toFloat() / pdfBitmap.width.toFloat(),
+                        size.height.toFloat() / pdfBitmap.height.toFloat()
+                    )
+                    val pW = pdfBitmap.width * pScale
+                    val pH = pdfBitmap.height * pScale
+                    val pLeft = (size.width - pW) / 2f
+                    val pTop = (size.height - pH) / 2f
+                    val newX = ((change.position.x - pLeft) / pW).coerceIn(0f, 1f)
+                    val newY = ((change.position.y - pTop) / pH).coerceIn(0f, 1f)
+                    onPositionChange(newX, newY)
+                }
+            }
+    ) {
+        val pageScale = minOf(
+            size.width / pdfBitmap.width.toFloat(),
+            size.height / pdfBitmap.height.toFloat()
+        )
+        val pageW = pdfBitmap.width * pageScale
+        val pageH = pdfBitmap.height * pageScale
+        val pageLeft = (size.width - pageW) / 2f
+        val pageTop = (size.height - pageH) / 2f
+
+        drawImage(
+            image = pdfBitmap.asImageBitmap(),
+            dstOffset = androidx.compose.ui.unit.IntOffset(pageLeft.toInt(), pageTop.toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(pageW.toInt(), pageH.toInt())
+        )
+
+        val sigW = pageW * sigScale
+        val sigH = sigW * (signatureBitmap.height.toFloat() / signatureBitmap.width.toFloat())
+        val sigLeft = pageLeft + (sigX * pageW) - (sigW / 2f)
+        val sigTop = pageTop + (sigY * pageH) - (sigH / 2f)
+
+        drawImage(
+            image = signatureBitmap.asImageBitmap(),
+            dstOffset = androidx.compose.ui.unit.IntOffset(sigLeft.toInt(), sigTop.toInt()),
+            dstSize = androidx.compose.ui.unit.IntSize(sigW.toInt(), sigH.toInt())
+        )
+
+        drawRect(
+            color = Color(0x400000FF),
+            topLeft = Offset(sigLeft, sigTop),
+            size = androidx.compose.ui.geometry.Size(sigW, sigH),
+            style = Stroke(width = 2f)
+        )
+    }
 }
 
 fun getFontStyleForCursive(font: CursiveFont): TextStyle {
