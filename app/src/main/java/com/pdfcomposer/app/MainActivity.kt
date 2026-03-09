@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -249,9 +248,10 @@ fun dynamicColorScheme(): ColorScheme {
     )
 }
 
-val LocalOpenSigningPad = compositionLocalOf<(() -> Unit)?> { null }
-val LocalSignatureBitmapResult = compositionLocalOf<android.graphics.Bitmap?> { null }
-val LocalConsumeSignatureResult = compositionLocalOf<(() -> Unit)?> { null }
+val LocalRequestDocumentSign = compositionLocalOf<((StoredPdfDocument) -> Unit)?> { null }
+val LocalOpenSigningPadForTools = compositionLocalOf<(() -> Unit)?> { null }
+val LocalToolsSignatureBitmap = compositionLocalOf<android.graphics.Bitmap?> { null }
+val LocalConsumeToolsSignature = compositionLocalOf<(() -> Unit)?> { null }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -270,7 +270,16 @@ fun MainScreen(viewModel: PdfViewModel) {
     
     var fullScreenDrawActive by rememberSaveable { mutableStateOf(false) }
     var signatureBitmapResult by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var signatureBitmapConsumed by remember { mutableStateOf(false) }
+    
+    var docSignTarget by remember { mutableStateOf<StoredPdfDocument?>(null) }
+    var docSignShowDialog by rememberSaveable { mutableStateOf(false) }
+    var docSignBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
+    var docSignPdfFile by remember { mutableStateOf<File?>(null) }
+    var docSignShowPlacement by rememberSaveable { mutableStateOf(false) }
+    var docSignAwaitingPad by rememberSaveable { mutableStateOf(false) }
+    
+    var toolsSignAwaitingPad by rememberSaveable { mutableStateOf(false) }
+    var toolsSignBitmapConsumed by remember { mutableStateOf(false) }
     
     // Check onboarding status on launch
     LaunchedEffect(hasCompletedOnboarding) {
@@ -310,14 +319,20 @@ fun MainScreen(viewModel: PdfViewModel) {
     
     Box(modifier = Modifier.fillMaxSize()) {
     CompositionLocalProvider(
-        LocalOpenSigningPad provides {
+        LocalRequestDocumentSign provides { doc ->
+            docSignTarget = doc
+            docSignShowDialog = true
+        },
+        LocalOpenSigningPadForTools provides {
             signatureBitmapResult = null
-            signatureBitmapConsumed = false
+            toolsSignBitmapConsumed = false
+            toolsSignAwaitingPad = true
             fullScreenDrawActive = true
         },
-        LocalSignatureBitmapResult provides (if (signatureBitmapConsumed) null else signatureBitmapResult),
-        LocalConsumeSignatureResult provides {
-            signatureBitmapConsumed = true
+        LocalToolsSignatureBitmap provides (if (toolsSignBitmapConsumed) null else if (toolsSignAwaitingPad && signatureBitmapResult != null) signatureBitmapResult else null),
+        LocalConsumeToolsSignature provides {
+            toolsSignBitmapConsumed = true
+            toolsSignAwaitingPad = false
         }
     ) {
     Scaffold(
@@ -431,14 +446,143 @@ fun MainScreen(viewModel: PdfViewModel) {
     }
     } // CompositionLocalProvider
     
+    if (docSignShowDialog && docSignTarget != null) {
+        SignDocumentDialog(
+            onDismiss = {
+                docSignShowDialog = false
+                docSignTarget = null
+            },
+            onOpenFullScreenDraw = {
+                docSignShowDialog = false
+                docSignAwaitingPad = true
+                fullScreenDrawActive = true
+            },
+            onSignatureReady = { bitmap ->
+                docSignBitmap = bitmap
+                docSignShowDialog = false
+                scope.launch {
+                    try {
+                        val doc = docSignTarget ?: return@launch
+                        val file = if (doc.filePath.startsWith("content://")) {
+                            StorageUtils.copyUriToTempFile(context, Uri.parse(doc.filePath))
+                        } else {
+                            val sourceFile = File(doc.filePath)
+                            if (sourceFile.exists()) {
+                                val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
+                                sourceFile.copyTo(tempFile, overwrite = true)
+                                tempFile
+                            } else null
+                        }
+                        if (file != null && file.exists()) {
+                            docSignPdfFile = file
+                            docSignShowPlacement = true
+                        } else {
+                            Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                            docSignBitmap = null
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                        docSignBitmap = null
+                    }
+                }
+            }
+        )
+    }
+    
+    if (docSignShowPlacement && docSignPdfFile != null && docSignBitmap != null) {
+        SignPdfScreen(
+            pdfFile = docSignPdfFile!!,
+            signatureBitmap = docSignBitmap!!,
+            onDismiss = {
+                docSignPdfFile?.delete()
+                docSignPdfFile = null
+                docSignBitmap = null
+                docSignShowPlacement = false
+                docSignTarget = null
+            },
+            onSigned = { signedFile ->
+                scope.launch {
+                    try {
+                        val savedUri = if (safDirectoryUri != null) {
+                            val folderUri = Uri.parse(safDirectoryUri)
+                            val pdfUri = StorageUtils.createPdfFile(context, folderUri, signedFile.name)
+                            if (pdfUri != null) {
+                                StorageUtils.copyPdfToSaf(context, signedFile, pdfUri)
+                                pdfUri.toString()
+                            } else {
+                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), signedFile.name)
+                                signedFile.copyTo(appFile, overwrite = true)
+                                appFile.absolutePath
+                            }
+                        } else {
+                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), signedFile.name)
+                            signedFile.copyTo(appFile, overwrite = true)
+                            appFile.absolutePath
+                        }
+                        viewModel.addDocument(
+                            signedFile.name,
+                            savedUri,
+                            signedFile.countPages(),
+                            docSignTarget?.category ?: ""
+                        )
+                        Toast.makeText(context, "Document signed successfully!", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error saving signed PDF: ${e.message}", Toast.LENGTH_LONG).show()
+                    } finally {
+                        signedFile.delete()
+                        docSignPdfFile?.delete()
+                        docSignPdfFile = null
+                        docSignBitmap = null
+                        docSignShowPlacement = false
+                        docSignTarget = null
+                    }
+                }
+            }
+        )
+    }
+    
     if (fullScreenDrawActive) {
         FullScreenDrawSignature(
             onDismiss = {
                 fullScreenDrawActive = false
+                docSignAwaitingPad = false
+                toolsSignAwaitingPad = false
             },
             onSignatureReady = { bitmap ->
-                signatureBitmapResult = bitmap
                 fullScreenDrawActive = false
+                if (docSignAwaitingPad) {
+                    docSignAwaitingPad = false
+                    docSignBitmap = bitmap
+                    val doc = docSignTarget
+                    if (doc != null) {
+                        scope.launch {
+                            try {
+                                val file = if (doc.filePath.startsWith("content://")) {
+                                    StorageUtils.copyUriToTempFile(context, Uri.parse(doc.filePath))
+                                } else {
+                                    val sourceFile = File(doc.filePath)
+                                    if (sourceFile.exists()) {
+                                        val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
+                                        sourceFile.copyTo(tempFile, overwrite = true)
+                                        tempFile
+                                    } else null
+                                }
+                                if (file != null && file.exists()) {
+                                    docSignPdfFile = file
+                                    docSignShowPlacement = true
+                                } else {
+                                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                                    docSignBitmap = null
+                                }
+                            } catch (e: Exception) {
+                                Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                                docSignBitmap = null
+                            }
+                        }
+                    }
+                } else {
+                    signatureBitmapResult = bitmap
+                }
             }
         )
     }
@@ -705,18 +849,11 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
     var showCompressDialog by remember { mutableStateOf(false) }
     var showOcrDialog by remember { mutableStateOf(false) }
     var showMergeDialog by remember { mutableStateOf(false) }
-    var showSignatureDialog by rememberSaveable { mutableStateOf(false) }
-    var showSignPlacement by rememberSaveable { mutableStateOf(false) }
-    var signatureBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
-    var signPdfFile by remember { mutableStateOf<File?>(null) }
     var showAnnotateDialog by rememberSaveable { mutableStateOf(false) }
     var annotatePdfFile by remember { mutableStateOf<File?>(null) }
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
-    val openSigningPad = LocalOpenSigningPad.current
-    val signatureFromPad = LocalSignatureBitmapResult.current
-    val consumeSignatureResult = LocalConsumeSignatureResult.current
-    var awaitingSignatureFromPad by rememberSaveable { mutableStateOf(false) }
+    val requestDocumentSign = LocalRequestDocumentSign.current
     
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -990,7 +1127,7 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         leadingIcon = { Icon(Icons.Default.Draw, null) },
                         onClick = {
                             showMenu = false
-                            showSignatureDialog = true
+                            requestDocumentSign?.invoke(document)
                         }
                     )
                     
@@ -1224,130 +1361,6 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
                         mergePdfList.forEach { it.second.delete() }
                         mergePdfList.clear()
                         showMergeDialog = false
-                    }
-                }
-            }
-        )
-    }
-    
-    if (awaitingSignatureFromPad && signatureFromPad != null) {
-        LaunchedEffect(Unit) {
-            awaitingSignatureFromPad = false
-            signatureBitmap = signatureFromPad
-            consumeSignatureResult?.invoke()
-            try {
-                val file = if (document.filePath.startsWith("content://")) {
-                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
-                } else {
-                    val sourceFile = File(document.filePath)
-                    if (sourceFile.exists()) {
-                        val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
-                        sourceFile.copyTo(tempFile, overwrite = true)
-                        tempFile
-                    } else {
-                        null
-                    }
-                }
-                if (file != null && file.exists()) {
-                    signPdfFile = file
-                    showSignPlacement = true
-                } else {
-                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
-                    signatureBitmap = null
-                }
-            } catch (e: Exception) {
-                Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
-                signatureBitmap = null
-            }
-        }
-    }
-    
-    if (showSignatureDialog) {
-        SignDocumentDialog(
-            onDismiss = { showSignatureDialog = false },
-            onOpenFullScreenDraw = {
-                showSignatureDialog = false
-                awaitingSignatureFromPad = true
-                openSigningPad?.invoke()
-            },
-            onSignatureReady = { bitmap ->
-                signatureBitmap = bitmap
-                showSignatureDialog = false
-                scope.launch {
-                    try {
-                        val file = if (document.filePath.startsWith("content://")) {
-                            StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
-                        } else {
-                            val sourceFile = File(document.filePath)
-                            if (sourceFile.exists()) {
-                                val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
-                                sourceFile.copyTo(tempFile, overwrite = true)
-                                tempFile
-                            } else {
-                                null
-                            }
-                        }
-                        if (file != null && file.exists()) {
-                            signPdfFile = file
-                            showSignPlacement = true
-                        } else {
-                            Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
-                            signatureBitmap = null
-                        }
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
-                        signatureBitmap = null
-                    }
-                }
-            }
-        )
-    }
-    
-    if (showSignPlacement && signPdfFile != null && signatureBitmap != null) {
-        SignPdfScreen(
-            pdfFile = signPdfFile!!,
-            signatureBitmap = signatureBitmap!!,
-            onDismiss = {
-                signPdfFile?.delete()
-                signPdfFile = null
-                signatureBitmap = null
-                showSignPlacement = false
-            },
-            onSigned = { signedFile ->
-                scope.launch {
-                    try {
-                        val savedUri = if (safDirectoryUri != null) {
-                            val folderUri = Uri.parse(safDirectoryUri)
-                            val pdfUri = StorageUtils.createPdfFile(context, folderUri, signedFile.name)
-                            if (pdfUri != null) {
-                                StorageUtils.copyPdfToSaf(context, signedFile, pdfUri)
-                                pdfUri.toString()
-                            } else {
-                                val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), signedFile.name)
-                                signedFile.copyTo(appFile, overwrite = true)
-                                appFile.absolutePath
-                            }
-                        } else {
-                            val appFile = File(context.getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), signedFile.name)
-                            signedFile.copyTo(appFile, overwrite = true)
-                            appFile.absolutePath
-                        }
-                        
-                        viewModel.addDocument(
-                            signedFile.name,
-                            savedUri,
-                            signedFile.countPages(),
-                            document.category
-                        )
-                        Toast.makeText(context, "Document signed successfully!", Toast.LENGTH_SHORT).show()
-                    } catch (e: Exception) {
-                        Toast.makeText(context, "Error saving signed PDF: ${e.message}", Toast.LENGTH_LONG).show()
-                    } finally {
-                        signedFile.delete()
-                        signPdfFile?.delete()
-                        signPdfFile = null
-                        signatureBitmap = null
-                        showSignPlacement = false
                     }
                 }
             }
@@ -1937,9 +1950,9 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     var signPdfFile by remember { mutableStateOf<File?>(null) }
     var showAnnotateDialog by rememberSaveable { mutableStateOf(false) }
     var annotatePdfFile by remember { mutableStateOf<File?>(null) }
-    val openSigningPad = LocalOpenSigningPad.current
-    val signatureFromPad = LocalSignatureBitmapResult.current
-    val consumeSignatureResult = LocalConsumeSignatureResult.current
+    val openSigningPad = LocalOpenSigningPadForTools.current
+    val signatureFromPad = LocalToolsSignatureBitmap.current
+    val consumeSignatureResult = LocalConsumeToolsSignature.current
     var awaitingSignatureFromPad by rememberSaveable { mutableStateOf(false) }
     
     val mergePdfPicker = rememberLauncherForActivityResult(
