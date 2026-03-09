@@ -1225,39 +1225,42 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
         )
     }
     
-    if (showSignatureDialog) {
-        val handleSignatureReady: (android.graphics.Bitmap) -> Unit = { bitmap ->
-            signatureBitmap = bitmap
-            showSignatureDialog = false
-            scope.launch {
-                var fileToCleanup: File? = null
-                try {
-                    val file = if (document.filePath.startsWith("content://")) {
-                        StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+    val handleSignatureReady: (android.graphics.Bitmap) -> Unit = { bitmap ->
+        signatureBitmap = bitmap
+        showSignatureDialog = false
+    }
+    
+    LaunchedEffect(signatureBitmap) {
+        val bmp = signatureBitmap
+        if (bmp != null && !showSignPlacement && signPdfFile == null) {
+            try {
+                val file = if (document.filePath.startsWith("content://")) {
+                    StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                } else {
+                    val sourceFile = File(document.filePath)
+                    if (sourceFile.exists()) {
+                        val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
+                        sourceFile.copyTo(tempFile, overwrite = true)
+                        tempFile
                     } else {
-                        val sourceFile = File(document.filePath)
-                        if (sourceFile.exists()) {
-                            val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
-                            sourceFile.copyTo(tempFile, overwrite = true)
-                            tempFile
-                        } else {
-                            null
-                        }
+                        null
                     }
-                    if (file != null && file.exists()) {
-                        signPdfFile = file
-                        showSignPlacement = true
-                    } else {
-                        Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
-                        signatureBitmap = null
-                    }
-                } catch (e: Exception) {
-                    fileToCleanup?.delete()
-                    Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+                if (file != null && file.exists()) {
+                    signPdfFile = file
+                    showSignPlacement = true
+                } else {
+                    Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
                     signatureBitmap = null
                 }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                signatureBitmap = null
             }
         }
+    }
+    
+    if (showSignatureDialog) {
         SignDocumentDialog(
             onDismiss = { showSignatureDialog = false },
             onOpenFullScreenDraw = {
@@ -2244,19 +2247,28 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         )
     }
     
-    if (showSignatureDialog) {
-        val handleSignatureReady: (android.graphics.Bitmap) -> Unit = { bitmap ->
-            signatureBitmap = bitmap
-            showSignatureDialog = false
+    var signatureAwaitingPdf by rememberSaveable { mutableStateOf(false) }
+    val handleToolsSignatureReady: (android.graphics.Bitmap) -> Unit = { bitmap ->
+        signatureBitmap = bitmap
+        showSignatureDialog = false
+        signatureAwaitingPdf = true
+    }
+    
+    LaunchedEffect(signatureAwaitingPdf) {
+        if (signatureAwaitingPdf && signatureBitmap != null) {
+            signatureAwaitingPdf = false
             signPdfPicker.launch(arrayOf("application/pdf"))
         }
+    }
+    
+    if (showSignatureDialog) {
         SignDocumentDialog(
             onDismiss = { showSignatureDialog = false },
             onOpenFullScreenDraw = {
                 showSignatureDialog = false
-                requestFullScreenDraw?.invoke(FullScreenDrawRequest(handleSignatureReady))
+                requestFullScreenDraw?.invoke(FullScreenDrawRequest(handleToolsSignatureReady))
             },
-            onSignatureReady = handleSignatureReady
+            onSignatureReady = handleToolsSignatureReady
         )
     }
     
