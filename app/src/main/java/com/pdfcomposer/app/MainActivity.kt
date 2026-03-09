@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.ui.Alignment
@@ -670,11 +671,11 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
     var showCompressDialog by remember { mutableStateOf(false) }
     var showOcrDialog by remember { mutableStateOf(false) }
     var showMergeDialog by remember { mutableStateOf(false) }
-    var showSignatureDialog by remember { mutableStateOf(false) }
-    var showSignPlacement by remember { mutableStateOf(false) }
+    var showSignatureDialog by rememberSaveable { mutableStateOf(false) }
+    var showSignPlacement by rememberSaveable { mutableStateOf(false) }
     var signatureBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var signPdfFile by remember { mutableStateOf<File?>(null) }
-    var showAnnotateDialog by remember { mutableStateOf(false) }
+    var showAnnotateDialog by rememberSaveable { mutableStateOf(false) }
     var annotatePdfFile by remember { mutableStateOf<File?>(null) }
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
@@ -1857,11 +1858,11 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     var showOcrDialog by remember { mutableStateOf(false) }
     var showMergeDialog by remember { mutableStateOf(false) }
     val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
-    var showSignatureDialog by remember { mutableStateOf(false) }
-    var showSignPlacement by remember { mutableStateOf(false) }
+    var showSignatureDialog by rememberSaveable { mutableStateOf(false) }
+    var showSignPlacement by rememberSaveable { mutableStateOf(false) }
     var signatureBitmap by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     var signPdfFile by remember { mutableStateOf<File?>(null) }
-    var showAnnotateDialog by remember { mutableStateOf(false) }
+    var showAnnotateDialog by rememberSaveable { mutableStateOf(false) }
     var annotatePdfFile by remember { mutableStateOf<File?>(null) }
     
     val mergePdfPicker = rememberLauncherForActivityResult(
