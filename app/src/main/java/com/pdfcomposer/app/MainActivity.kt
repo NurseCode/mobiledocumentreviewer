@@ -249,11 +249,9 @@ fun dynamicColorScheme(): ColorScheme {
     )
 }
 
-data class FullScreenDrawRequest(
-    val onSignatureReady: (android.graphics.Bitmap) -> Unit
-)
-
-val LocalFullScreenDrawRequest = compositionLocalOf<((FullScreenDrawRequest) -> Unit)?> { null }
+val LocalOpenSigningPad = compositionLocalOf<(() -> Unit)?> { null }
+val LocalSignatureBitmapResult = compositionLocalOf<android.graphics.Bitmap?> { null }
+val LocalConsumeSignatureResult = compositionLocalOf<(() -> Unit)?> { null }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -271,7 +269,7 @@ fun MainScreen(viewModel: PdfViewModel) {
     val scope = rememberCoroutineScope()
     
     var fullScreenDrawActive by rememberSaveable { mutableStateOf(false) }
-    var fullScreenDrawCallback by remember { mutableStateOf<((android.graphics.Bitmap) -> Unit)?>(null) }
+    var signatureBitmapResult by remember { mutableStateOf<android.graphics.Bitmap?>(null) }
     
     // Check onboarding status on launch
     LaunchedEffect(hasCompletedOnboarding) {
@@ -311,10 +309,9 @@ fun MainScreen(viewModel: PdfViewModel) {
     
     Box(modifier = Modifier.fillMaxSize()) {
     CompositionLocalProvider(
-        LocalFullScreenDrawRequest provides { request ->
-            fullScreenDrawCallback = request.onSignatureReady
-            fullScreenDrawActive = true
-        }
+        LocalOpenSigningPad provides { fullScreenDrawActive = true },
+        LocalSignatureBitmapResult provides signatureBitmapResult,
+        LocalConsumeSignatureResult provides { signatureBitmapResult = null }
     ) {
     Scaffold(
         topBar = {
@@ -431,12 +428,10 @@ fun MainScreen(viewModel: PdfViewModel) {
         FullScreenDrawSignature(
             onDismiss = {
                 fullScreenDrawActive = false
-                fullScreenDrawCallback = null
             },
             onSignatureReady = { bitmap ->
-                fullScreenDrawCallback?.invoke(bitmap)
+                signatureBitmapResult = bitmap
                 fullScreenDrawActive = false
-                fullScreenDrawCallback = null
             }
         )
     }
@@ -711,7 +706,10 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
     var annotatePdfFile by remember { mutableStateOf<File?>(null) }
     var selectedPdfFile by remember { mutableStateOf<File?>(null) }
     val mergePdfList = remember { mutableStateListOf<Pair<String, File>>() }
-    val requestFullScreenDraw = LocalFullScreenDrawRequest.current
+    val openSigningPad = LocalOpenSigningPad.current
+    val signatureFromPad = LocalSignatureBitmapResult.current
+    val consumeSignatureResult = LocalConsumeSignatureResult.current
+    var awaitingSignatureFromPad by rememberSaveable { mutableStateOf(false) }
     
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -1225,14 +1223,11 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
         )
     }
     
-    val handleSignatureReady: (android.graphics.Bitmap) -> Unit = { bitmap ->
-        signatureBitmap = bitmap
-        showSignatureDialog = false
-    }
-    
-    LaunchedEffect(signatureBitmap) {
-        val bmp = signatureBitmap
-        if (bmp != null && !showSignPlacement && signPdfFile == null) {
+    LaunchedEffect(signatureFromPad, awaitingSignatureFromPad) {
+        if (awaitingSignatureFromPad && signatureFromPad != null) {
+            awaitingSignatureFromPad = false
+            signatureBitmap = signatureFromPad
+            consumeSignatureResult?.invoke()
             try {
                 val file = if (document.filePath.startsWith("content://")) {
                     StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
@@ -1265,9 +1260,39 @@ fun DocumentCard(document: StoredPdfDocument, viewModel: PdfViewModel, onClick: 
             onDismiss = { showSignatureDialog = false },
             onOpenFullScreenDraw = {
                 showSignatureDialog = false
-                requestFullScreenDraw?.invoke(FullScreenDrawRequest(handleSignatureReady))
+                awaitingSignatureFromPad = true
+                openSigningPad?.invoke()
             },
-            onSignatureReady = handleSignatureReady
+            onSignatureReady = { bitmap ->
+                signatureBitmap = bitmap
+                showSignatureDialog = false
+                scope.launch {
+                    try {
+                        val file = if (document.filePath.startsWith("content://")) {
+                            StorageUtils.copyUriToTempFile(context, Uri.parse(document.filePath))
+                        } else {
+                            val sourceFile = File(document.filePath)
+                            if (sourceFile.exists()) {
+                                val tempFile = File(context.cacheDir, "temp_sign_${System.currentTimeMillis()}.pdf")
+                                sourceFile.copyTo(tempFile, overwrite = true)
+                                tempFile
+                            } else {
+                                null
+                            }
+                        }
+                        if (file != null && file.exists()) {
+                            signPdfFile = file
+                            showSignPlacement = true
+                        } else {
+                            Toast.makeText(context, "File not found", Toast.LENGTH_SHORT).show()
+                            signatureBitmap = null
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Error loading file: ${e.message}", Toast.LENGTH_SHORT).show()
+                        signatureBitmap = null
+                    }
+                }
+            }
         )
     }
     
@@ -1905,7 +1930,10 @@ fun ToolsScreen(viewModel: PdfViewModel) {
     var signPdfFile by remember { mutableStateOf<File?>(null) }
     var showAnnotateDialog by rememberSaveable { mutableStateOf(false) }
     var annotatePdfFile by remember { mutableStateOf<File?>(null) }
-    val requestFullScreenDraw = LocalFullScreenDrawRequest.current
+    val openSigningPad = LocalOpenSigningPad.current
+    val signatureFromPad = LocalSignatureBitmapResult.current
+    val consumeSignatureResult = LocalConsumeSignatureResult.current
+    var awaitingSignatureFromPad by rememberSaveable { mutableStateOf(false) }
     
     val mergePdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -2247,16 +2275,11 @@ fun ToolsScreen(viewModel: PdfViewModel) {
         )
     }
     
-    var signatureAwaitingPdf by rememberSaveable { mutableStateOf(false) }
-    val handleToolsSignatureReady: (android.graphics.Bitmap) -> Unit = { bitmap ->
-        signatureBitmap = bitmap
-        showSignatureDialog = false
-        signatureAwaitingPdf = true
-    }
-    
-    LaunchedEffect(signatureAwaitingPdf) {
-        if (signatureAwaitingPdf && signatureBitmap != null) {
-            signatureAwaitingPdf = false
+    LaunchedEffect(signatureFromPad, awaitingSignatureFromPad) {
+        if (awaitingSignatureFromPad && signatureFromPad != null) {
+            awaitingSignatureFromPad = false
+            signatureBitmap = signatureFromPad
+            consumeSignatureResult?.invoke()
             signPdfPicker.launch(arrayOf("application/pdf"))
         }
     }
@@ -2266,9 +2289,14 @@ fun ToolsScreen(viewModel: PdfViewModel) {
             onDismiss = { showSignatureDialog = false },
             onOpenFullScreenDraw = {
                 showSignatureDialog = false
-                requestFullScreenDraw?.invoke(FullScreenDrawRequest(handleToolsSignatureReady))
+                awaitingSignatureFromPad = true
+                openSigningPad?.invoke()
             },
-            onSignatureReady = handleToolsSignatureReady
+            onSignatureReady = { bitmap ->
+                signatureBitmap = bitmap
+                showSignatureDialog = false
+                signPdfPicker.launch(arrayOf("application/pdf"))
+            }
         )
     }
     
