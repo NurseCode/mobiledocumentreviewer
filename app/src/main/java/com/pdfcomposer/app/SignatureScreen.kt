@@ -473,6 +473,7 @@ fun UploadSignaturePanel(onSignatureReady: (Bitmap) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SignPdfScreen(
     pdfFile: File,
