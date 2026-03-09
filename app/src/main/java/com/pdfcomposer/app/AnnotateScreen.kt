@@ -107,7 +107,8 @@ fun AnnotatePdfDialog(
                 val renderer = PdfRenderer(fd)
                 pageCount = renderer.pageCount
                 val page = renderer.openPage(currentPage)
-                val scale = 3
+                val maxDim = maxOf(page.width, page.height)
+                val scale = if (maxDim < 500) 4 else if (maxDim < 1000) 3 else 2
                 val bitmap = Bitmap.createBitmap(
                     page.width * scale, page.height * scale, Bitmap.Config.ARGB_8888
                 )
@@ -337,19 +338,22 @@ fun AnnotatePdfDialog(
                                     translationY = panOffset.y
                                 }
                                 .pointerInput(selectedTool, selectedColor, strokeWidth, zoomScale, panOffset) {
+                                    fun calcPageGeometry(): FloatArray? {
+                                        val pdfBmp = pdfBitmap ?: return null
+                                        val wScale = size.width.toFloat() / pdfBmp.width.toFloat()
+                                        val pW = size.width.toFloat()
+                                        val pH = pdfBmp.height * wScale
+                                        val pLeft = 0f
+                                        val pTop = if (pH < size.height) (size.height - pH) / 2f else 0f
+                                        return floatArrayOf(pLeft, pTop, pW, pH)
+                                    }
                                     if (selectedTool == AnnotationTool.ERASER) {
                                         fun eraseAt(pos: Offset) {
                                             val pageAnnotations = allAnnotations[currentPage]
                                             if (pageAnnotations != null && pageAnnotations.isNotEmpty()) {
-                                                val pdfBmp = pdfBitmap ?: return
-                                                val pScale = minOf(
-                                                    size.width.toFloat() / pdfBmp.width.toFloat(),
-                                                    size.height.toFloat() / pdfBmp.height.toFloat()
-                                                )
-                                                val pW = pdfBmp.width * pScale
-                                                val pH = pdfBmp.height * pScale
-                                                val pLeft = (size.width - pW) / 2f
-                                                val pTop = (size.height - pH) / 2f
+                                                val geom = calcPageGeometry() ?: return
+                                                val pLeft = geom[0]; val pTop = geom[1]
+                                                val pW = geom[2]; val pH = geom[3]
                                                 val relX = (pos.x - pLeft) / pW
                                                 val relY = (pos.y - pTop) / pH
                                                 val threshold = 0.02f
@@ -374,29 +378,17 @@ fun AnnotatePdfDialog(
                                         detectDragGestures(
                                             onDragStart = { offset ->
                                                 currentPoints.clear()
-                                                val pdfBmp = pdfBitmap ?: return@detectDragGestures
-                                                val pScale = minOf(
-                                                    size.width.toFloat() / pdfBmp.width.toFloat(),
-                                                    size.height.toFloat() / pdfBmp.height.toFloat()
-                                                )
-                                                val pW = pdfBmp.width * pScale
-                                                val pH = pdfBmp.height * pScale
-                                                val pLeft = (size.width - pW) / 2f
-                                                val pTop = (size.height - pH) / 2f
+                                                val geom = calcPageGeometry() ?: return@detectDragGestures
+                                                val pLeft = geom[0]; val pTop = geom[1]
+                                                val pW = geom[2]; val pH = geom[3]
                                                 val relX = ((offset.x - pLeft) / pW).coerceIn(0f, 1f)
                                                 val relY = ((offset.y - pTop) / pH).coerceIn(0f, 1f)
                                                 currentPoints.add(Offset(relX, relY))
                                             },
                                             onDrag = { change, _ ->
-                                                val pdfBmp = pdfBitmap ?: return@detectDragGestures
-                                                val pScale = minOf(
-                                                    size.width.toFloat() / pdfBmp.width.toFloat(),
-                                                    size.height.toFloat() / pdfBmp.height.toFloat()
-                                                )
-                                                val pW = pdfBmp.width * pScale
-                                                val pH = pdfBmp.height * pScale
-                                                val pLeft = (size.width - pW) / 2f
-                                                val pTop = (size.height - pH) / 2f
+                                                val geom = calcPageGeometry() ?: return@detectDragGestures
+                                                val pLeft = geom[0]; val pTop = geom[1]
+                                                val pW = geom[2]; val pH = geom[3]
                                                 val relX = ((change.position.x - pLeft) / pW).coerceIn(0f, 1f)
                                                 val relY = ((change.position.y - pTop) / pH).coerceIn(0f, 1f)
                                                 currentPoints.add(Offset(relX, relY))
@@ -419,14 +411,11 @@ fun AnnotatePdfDialog(
                                 }
                         ) {
                             val pdfBmp = pdfBitmap!!
-                            val pageScale = minOf(
-                                size.width / pdfBmp.width.toFloat(),
-                                size.height / pdfBmp.height.toFloat()
-                            )
-                            val pageW = pdfBmp.width * pageScale
-                            val pageH = pdfBmp.height * pageScale
-                            val pageLeft = (size.width - pageW) / 2f
-                            val pageTop = (size.height - pageH) / 2f
+                            val widthScale = size.width / pdfBmp.width.toFloat()
+                            val pageW = size.width
+                            val pageH = pdfBmp.height * widthScale
+                            val pageLeft = 0f
+                            val pageTop = if (pageH < size.height) (size.height - pageH) / 2f else 0f
 
                             drawImage(
                                 image = pdfBmp.asImageBitmap(),
