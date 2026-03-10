@@ -324,6 +324,7 @@ fun TemplateFieldPlacementScreen(
     var showNameDialog by rememberSaveable { mutableStateOf(false) }
     var templateName by rememberSaveable { mutableStateOf("") }
     var selectedFieldId by remember { mutableStateOf<String?>(null) }
+    var draggingFieldId by remember { mutableStateOf<String?>(null) }
     var isSaving by remember { mutableStateOf(false) }
 
     LaunchedEffect(existingTemplateId) {
@@ -449,13 +450,15 @@ fun TemplateFieldPlacementScreen(
             )
 
             Text(
-                "Tap on the form to place fields. Tap a field to edit or remove it.",
+                if (selectedFieldId != null) "Selected: drag to move, drag corner to resize. Tap elsewhere to deselect."
+                else "Tap to place a field. Tap a field to select, double-tap to edit.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (selectedFieldId != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
             )
 
             val pageFields = fields.filter { it.page == currentPage }
+            val resizeHandleRelSize = 0.02f
 
             if (pdfBitmap != null) {
                 Box(
@@ -468,33 +471,133 @@ fun TemplateFieldPlacementScreen(
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
-                            .pointerInput(currentPage) {
-                                detectTapGestures { offset ->
-                                    val pdfBmp = pdfBitmap ?: return@detectTapGestures
-                                    val pScale = minOf(
-                                        size.width.toFloat() / pdfBmp.width.toFloat(),
-                                        size.height.toFloat() / pdfBmp.height.toFloat()
-                                    )
-                                    val pW = pdfBmp.width * pScale
-                                    val pH = pdfBmp.height * pScale
-                                    val pLeft = (size.width - pW) / 2f
-                                    val pTop = (size.height - pH) / 2f
-                                    val relX = ((offset.x - pLeft) / pW).coerceIn(0f, 1f)
-                                    val relY = ((offset.y - pTop) / pH).coerceIn(0f, 1f)
+                            .pointerInput(currentPage, selectedFieldId) {
+                                detectTapGestures(
+                                    onDoubleTap = { offset ->
+                                        val pdfBmp = pdfBitmap ?: return@detectTapGestures
+                                        val pScale = minOf(
+                                            size.width.toFloat() / pdfBmp.width.toFloat(),
+                                            size.height.toFloat() / pdfBmp.height.toFloat()
+                                        )
+                                        val pW = pdfBmp.width * pScale
+                                        val pH = pdfBmp.height * pScale
+                                        val pLeft = (size.width - pW) / 2f
+                                        val pTop = (size.height - pH) / 2f
+                                        val relX = ((offset.x - pLeft) / pW).coerceIn(0f, 1f)
+                                        val relY = ((offset.y - pTop) / pH).coerceIn(0f, 1f)
 
-                                    val tappedField = pageFields.find { f ->
-                                        relX >= f.x && relX <= f.x + f.width &&
-                                        relY >= f.y && relY <= f.y + f.height
+                                        val tappedField = pageFields.find { f ->
+                                            relX >= f.x && relX <= f.x + f.width &&
+                                            relY >= f.y && relY <= f.y + f.height
+                                        }
+                                        if (tappedField != null) {
+                                            editingField = tappedField
+                                            showFieldDialog = true
+                                        }
+                                    },
+                                    onTap = { offset ->
+                                        val pdfBmp = pdfBitmap ?: return@detectTapGestures
+                                        val pScale = minOf(
+                                            size.width.toFloat() / pdfBmp.width.toFloat(),
+                                            size.height.toFloat() / pdfBmp.height.toFloat()
+                                        )
+                                        val pW = pdfBmp.width * pScale
+                                        val pH = pdfBmp.height * pScale
+                                        val pLeft = (size.width - pW) / 2f
+                                        val pTop = (size.height - pH) / 2f
+                                        val relX = ((offset.x - pLeft) / pW).coerceIn(0f, 1f)
+                                        val relY = ((offset.y - pTop) / pH).coerceIn(0f, 1f)
+
+                                        val tappedField = pageFields.find { f ->
+                                            relX >= f.x && relX <= f.x + f.width &&
+                                            relY >= f.y && relY <= f.y + f.height
+                                        }
+                                        if (tappedField != null) {
+                                            selectedFieldId = if (selectedFieldId == tappedField.id) null else tappedField.id
+                                        } else if (selectedFieldId != null) {
+                                            selectedFieldId = null
+                                        } else {
+                                            pendingFieldPosition = Pair(relX, relY)
+                                            editingField = null
+                                            showFieldDialog = true
+                                        }
                                     }
-                                    if (tappedField != null) {
-                                        editingField = tappedField
-                                        showFieldDialog = true
-                                    } else {
-                                        pendingFieldPosition = Pair(relX, relY)
-                                        editingField = null
-                                        showFieldDialog = true
-                                    }
-                                }
+                                )
+                            }
+                            .pointerInput(currentPage, selectedFieldId) {
+                                detectDragGestures(
+                                    onDragStart = { offset ->
+                                        val pdfBmp = pdfBitmap ?: return@detectDragGestures
+                                        val pScale = minOf(
+                                            size.width.toFloat() / pdfBmp.width.toFloat(),
+                                            size.height.toFloat() / pdfBmp.height.toFloat()
+                                        )
+                                        val pW = pdfBmp.width * pScale
+                                        val pH = pdfBmp.height * pScale
+                                        val pLeft = (size.width - pW) / 2f
+                                        val pTop = (size.height - pH) / 2f
+                                        val relX = ((offset.x - pLeft) / pW).coerceIn(0f, 1f)
+                                        val relY = ((offset.y - pTop) / pH).coerceIn(0f, 1f)
+
+                                        val selField = pageFields.find { it.id == selectedFieldId }
+                                        if (selField != null) {
+                                            val handleX = selField.x + selField.width
+                                            val handleY = selField.y + selField.height
+                                            val hSize = resizeHandleRelSize
+                                            if (relX >= handleX - hSize && relX <= handleX + hSize &&
+                                                relY >= handleY - hSize && relY <= handleY + hSize) {
+                                                draggingFieldId = "resize:${selField.id}"
+                                                return@detectDragGestures
+                                            }
+                                        }
+
+                                        val dragTarget = pageFields.find { f ->
+                                            relX >= f.x && relX <= f.x + f.width &&
+                                            relY >= f.y && relY <= f.y + f.height
+                                        }
+                                        if (dragTarget != null) {
+                                            selectedFieldId = dragTarget.id
+                                            draggingFieldId = "move:${dragTarget.id}"
+                                        }
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        val pdfBmp = pdfBitmap ?: return@detectDragGestures
+                                        val pScale = minOf(
+                                            size.width.toFloat() / pdfBmp.width.toFloat(),
+                                            size.height.toFloat() / pdfBmp.height.toFloat()
+                                        )
+                                        val pW = pdfBmp.width * pScale
+                                        val pH = pdfBmp.height * pScale
+                                        val deltaRelX = dragAmount.x / pW
+                                        val deltaRelY = dragAmount.y / pH
+
+                                        val dragInfo = draggingFieldId ?: return@detectDragGestures
+                                        val parts = dragInfo.split(":", limit = 2)
+                                        if (parts.size != 2) return@detectDragGestures
+                                        val mode = parts[0]
+                                        val fId = parts[1]
+
+                                        val idx = fields.indexOfFirst { it.id == fId }
+                                        if (idx < 0) return@detectDragGestures
+                                        val f = fields[idx]
+
+                                        when (mode) {
+                                            "move" -> {
+                                                val newX = (f.x + deltaRelX).coerceIn(0f, 1f - f.width)
+                                                val newY = (f.y + deltaRelY).coerceIn(0f, 1f - f.height)
+                                                fields[idx] = f.copy(x = newX, y = newY)
+                                            }
+                                            "resize" -> {
+                                                val newW = (f.width + deltaRelX).coerceIn(0.03f, 1f - f.x)
+                                                val newH = (f.height + deltaRelY).coerceIn(0.02f, 1f - f.y)
+                                                fields[idx] = f.copy(width = newW, height = newH)
+                                            }
+                                        }
+                                    },
+                                    onDragEnd = { draggingFieldId = null },
+                                    onDragCancel = { draggingFieldId = null }
+                                )
                             }
                     ) {
                         val pdfBmp = pdfBitmap!!
@@ -518,6 +621,7 @@ fun TemplateFieldPlacementScreen(
                             val fTop = pageTop + field.y * pageH
                             val fW = field.width * pageW
                             val fH = field.height * pageH
+                            val isSelected = field.id == selectedFieldId
 
                             val fieldColor = when (field.type) {
                                 "text" -> Color(0x300000FF)
@@ -535,7 +639,7 @@ fun TemplateFieldPlacementScreen(
                             }
 
                             drawRect(
-                                color = fieldColor,
+                                color = if (isSelected) fieldColor.copy(alpha = 0.45f) else fieldColor,
                                 topLeft = Offset(fLeft, fTop),
                                 size = androidx.compose.ui.geometry.Size(fW, fH)
                             )
@@ -543,8 +647,24 @@ fun TemplateFieldPlacementScreen(
                                 color = borderColor,
                                 topLeft = Offset(fLeft, fTop),
                                 size = androidx.compose.ui.geometry.Size(fW, fH),
-                                style = Stroke(width = 2f)
+                                style = Stroke(width = if (isSelected) 4f else 2f)
                             )
+
+                            if (isSelected) {
+                                val handleSize = resizeHandleRelSize * minOf(pageW, pageH)
+                                val hx = fLeft + fW - handleSize / 2f
+                                val hy = fTop + fH - handleSize / 2f
+                                drawRect(
+                                    color = borderColor,
+                                    topLeft = Offset(hx, hy),
+                                    size = androidx.compose.ui.geometry.Size(handleSize, handleSize)
+                                )
+                                drawRect(
+                                    color = Color.White,
+                                    topLeft = Offset(hx + 2f, hy + 2f),
+                                    size = androidx.compose.ui.geometry.Size(handleSize - 4f, handleSize - 4f)
+                                )
+                            }
 
                             drawContext.canvas.nativeCanvas.drawText(
                                 field.name,
@@ -570,19 +690,24 @@ fun TemplateFieldPlacementScreen(
                 }
             }
 
-            val fieldSummary = fields.groupBy { it.page }.entries.sortedBy { it.key }
             if (fields.isNotEmpty()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         "${fields.size} field${if (fields.size != 1) "s" else ""} placed",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    if (selectedFieldId != null) {
+                        TextButton(onClick = { selectedFieldId = null }) {
+                            Text("Deselect")
+                        }
+                    }
                 }
             }
         }
