@@ -11,4 +11,7 @@
     
     <!-- All internal files -->
     <files-path name="all_files" path="." />
+
+    <!-- All cache files (for sharing generated PDFs) -->
+    <cache-path name="all_cache" path="." />
 </paths>

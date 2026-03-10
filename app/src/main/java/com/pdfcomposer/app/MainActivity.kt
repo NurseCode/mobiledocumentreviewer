@@ -72,8 +72,38 @@ data class StoredPdfDocument(
     val fileName: String,
     val filePath: String,
     val pageCount: Int,
-    val category: String = "",  // Folder/category name (e.g., "Client A", "Receipts")
+    val category: String = "",
     val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(tableName = "form_templates")
+data class FormTemplate(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val name: String,
+    val sourceFilePath: String,
+    val pageCount: Int,
+    val createdAt: Long = System.currentTimeMillis()
+)
+
+@Entity(
+    tableName = "template_fields",
+    foreignKeys = [ForeignKey(
+        entity = FormTemplate::class,
+        parentColumns = ["id"],
+        childColumns = ["templateId"],
+        onDelete = ForeignKey.CASCADE
+    )]
+)
+data class TemplateField(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val templateId: Int,
+    val fieldName: String,
+    val fieldType: String,
+    val pageNumber: Int,
+    val relativeX: Float,
+    val relativeY: Float,
+    val relativeWidth: Float,
+    val relativeHeight: Float
 )
 
 @Dao
@@ -115,10 +145,55 @@ interface PdfDocumentDao {
     suspend fun getCount(): Int
 }
 
-@Database(entities = [Bookmark::class, StoredPdfDocument::class], version = 2, exportSchema = false)
+@Dao
+interface FormTemplateDao {
+    @Query("SELECT * FROM form_templates ORDER BY createdAt DESC")
+    fun getAllTemplates(): Flow<List<FormTemplate>>
+    
+    @Query("SELECT * FROM form_templates WHERE id = :id")
+    suspend fun getTemplateById(id: Int): FormTemplate?
+    
+    @Insert
+    suspend fun insert(template: FormTemplate): Long
+    
+    @Update
+    suspend fun update(template: FormTemplate)
+    
+    @Delete
+    suspend fun delete(template: FormTemplate)
+}
+
+@Dao
+interface TemplateFieldDao {
+    @Query("SELECT * FROM template_fields WHERE templateId = :templateId ORDER BY pageNumber ASC, relativeY ASC")
+    suspend fun getFieldsForTemplate(templateId: Int): List<TemplateField>
+    
+    @Query("SELECT * FROM template_fields WHERE templateId = :templateId ORDER BY pageNumber ASC, relativeY ASC")
+    fun getFieldsForTemplateFlow(templateId: Int): Flow<List<TemplateField>>
+    
+    @Insert
+    suspend fun insertAll(fields: List<TemplateField>)
+    
+    @Query("DELETE FROM template_fields WHERE templateId = :templateId")
+    suspend fun deleteFieldsForTemplate(templateId: Int)
+
+    @Transaction
+    suspend fun replaceFieldsForTemplate(templateId: Int, fields: List<TemplateField>) {
+        deleteFieldsForTemplate(templateId)
+        insertAll(fields)
+    }
+}
+
+@Database(
+    entities = [Bookmark::class, StoredPdfDocument::class, FormTemplate::class, TemplateField::class],
+    version = 3,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun pdfDocumentDao(): PdfDocumentDao
+    abstract fun formTemplateDao(): FormTemplateDao
+    abstract fun templateFieldDao(): TemplateFieldDao
     
     companion object {
         @Volatile
@@ -131,7 +206,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pdf_composer_database"
                 )
-                .fallbackToDestructiveMigration()  // For development; proper migration needed for production
+                .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
                 instance
@@ -142,10 +217,13 @@ abstract class AppDatabase : RoomDatabase() {
 
 class PdfViewModel(
     private val bookmarkDao: BookmarkDao,
-    private val pdfDocumentDao: PdfDocumentDao
+    private val pdfDocumentDao: PdfDocumentDao,
+    private val formTemplateDao: FormTemplateDao,
+    private val templateFieldDao: TemplateFieldDao
 ) : ViewModel() {
     
     val allDocuments: Flow<List<StoredPdfDocument>> = pdfDocumentDao.getAllDocuments()
+    val allTemplates: Flow<List<FormTemplate>> = formTemplateDao.getAllTemplates()
     
     fun getBookmarksForPdf(uri: String): Flow<List<Bookmark>> {
         return bookmarkDao.getBookmarksForPdf(uri)
@@ -195,6 +273,36 @@ class PdfViewModel(
             bookmarkDao.deleteAllForPdf(document.filePath)
         }
     }
+    
+    suspend fun addTemplate(name: String, sourceFilePath: String, pageCount: Int): Long {
+        return formTemplateDao.insert(FormTemplate(name = name, sourceFilePath = sourceFilePath, pageCount = pageCount))
+    }
+    
+    suspend fun getTemplate(id: Int): FormTemplate? {
+        return formTemplateDao.getTemplateById(id)
+    }
+    
+    fun deleteTemplate(template: FormTemplate) {
+        viewModelScope.launch {
+            formTemplateDao.delete(template)
+        }
+    }
+
+    suspend fun updateTemplate(template: FormTemplate) {
+        formTemplateDao.update(template)
+    }
+
+    suspend fun saveTemplateFields(templateId: Int, fields: List<TemplateField>) {
+        templateFieldDao.replaceFieldsForTemplate(templateId, fields)
+    }
+    
+    suspend fun getTemplateFields(templateId: Int): List<TemplateField> {
+        return templateFieldDao.getFieldsForTemplate(templateId)
+    }
+    
+    fun getTemplateFieldsFlow(templateId: Int): Flow<List<TemplateField>> {
+        return templateFieldDao.getFieldsForTemplateFlow(templateId)
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -212,7 +320,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     val database = AppDatabase.getDatabase(LocalContext.current)
                     val viewModel = remember {
-                        PdfViewModel(database.bookmarkDao(), database.pdfDocumentDao())
+                        PdfViewModel(database.bookmarkDao(), database.pdfDocumentDao(), database.formTemplateDao(), database.templateFieldDao())
                     }
                     MainScreen(viewModel)
                 }
@@ -367,6 +475,12 @@ fun MainScreen(viewModel: PdfViewModel) {
                         onClick = { selectedScreen = Screen.Tools }
                     )
                     NavigationBarItem(
+                        icon = { Icon(Icons.Default.Description, "Forms") },
+                        label = { Text("Forms", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        selected = selectedScreen == Screen.Templates,
+                        onClick = { selectedScreen = Screen.Templates }
+                    )
+                    NavigationBarItem(
                         icon = { Icon(Icons.Default.Settings, "Settings") },
                         label = { Text("Settings", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Settings,
@@ -398,6 +512,12 @@ fun MainScreen(viewModel: PdfViewModel) {
                         label = { Text("Tools", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         selected = selectedScreen == Screen.Tools,
                         onClick = { selectedScreen = Screen.Tools }
+                    )
+                    NavigationRailItem(
+                        icon = { Icon(Icons.Default.Description, "Forms") },
+                        label = { Text("Forms", style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        selected = selectedScreen == Screen.Templates,
+                        onClick = { selectedScreen = Screen.Templates }
                     )
                     NavigationRailItem(
                         icon = { Icon(Icons.Default.Settings, "Settings") },
@@ -599,6 +719,7 @@ fun ScreenContent(
         Screen.Home -> HomeScreen(viewModel, onViewDocument)
         Screen.Scan -> ScanScreen(viewModel)
         Screen.Tools -> ToolsScreen(viewModel)
+        Screen.Templates -> TemplateListScreen(viewModel)
         Screen.Settings -> SettingsScreen()
     }
 }
@@ -3306,5 +3427,5 @@ fun File.countPages(): Int {
 }
 
 enum class Screen {
-    Home, Scan, Tools, Settings
+    Home, Scan, Tools, Templates, Settings
 }
