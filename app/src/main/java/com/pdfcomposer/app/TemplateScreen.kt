@@ -48,10 +48,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import java.io.BufferedOutputStream
 import java.io.File
+import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+import org.json.JSONArray
+import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,6 +71,10 @@ fun TemplateListScreen(viewModel: PdfViewModel) {
     var fillingTemplateId by rememberSaveable { mutableStateOf(-1) }
     var pendingSourceFile by remember { mutableStateOf<File?>(null) }
     var pendingPageCount by rememberSaveable { mutableStateOf(0) }
+
+    var isExporting by remember { mutableStateOf(false) }
+    var isImporting by remember { mutableStateOf(false) }
+    var pendingExportFile by remember { mutableStateOf<File?>(null) }
 
     val pdfPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -87,6 +98,55 @@ fun TemplateListScreen(viewModel: PdfViewModel) {
                     activeScreen = "create"
                 } else {
                     Toast.makeText(context, "Could not open PDF", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    val exportSaver = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/zip")
+    ) { uri ->
+        if (uri != null && pendingExportFile != null) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        pendingExportFile!!.inputStream().use { inp -> inp.copyTo(out) }
+                    }
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Template exported!", Toast.LENGTH_SHORT).show()
+                    }
+                } catch (e: Exception) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                } finally {
+                    pendingExportFile?.delete()
+                    pendingExportFile = null
+                    isExporting = false
+                }
+            }
+        } else {
+            pendingExportFile?.delete()
+            pendingExportFile = null
+            isExporting = false
+        }
+    }
+
+    val importPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            isImporting = true
+            scope.launch {
+                try {
+                    val result = withContext(Dispatchers.IO) {
+                        importTemplateFromZip(context, uri, viewModel)
+                    }
+                    Toast.makeText(context, result, Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(context, "Import failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                } finally {
+                    isImporting = false
                 }
             }
         }
@@ -142,6 +202,15 @@ fun TemplateListScreen(viewModel: PdfViewModel) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text("Create Template")
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedButton(
+                                onClick = { importPicker.launch(arrayOf("application/zip", "application/octet-stream")) },
+                                enabled = !isImporting
+                            ) {
+                                Icon(Icons.Default.FileOpen, null, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(if (isImporting) "Importing..." else "Import Template")
+                            }
                         }
                     }
                 } else {
@@ -169,18 +238,55 @@ fun TemplateListScreen(viewModel: PdfViewModel) {
                                         }
                                     }
                                 },
+                                onExport = {
+                                    if (!isExporting) {
+                                        isExporting = true
+                                        scope.launch {
+                                            try {
+                                                val zipFile = withContext(Dispatchers.IO) {
+                                                    exportTemplateToZip(context, template, viewModel)
+                                                }
+                                                if (zipFile != null) {
+                                                    pendingExportFile = zipFile
+                                                    val safeName = template.name.replace(Regex("[^a-zA-Z0-9_\\- ]"), "").trim()
+                                                    exportSaver.launch("${safeName}.dtp.zip")
+                                                } else {
+                                                    Toast.makeText(context, "Export failed: source file not found", Toast.LENGTH_SHORT).show()
+                                                    isExporting = false
+                                                }
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                                                isExporting = false
+                                            }
+                                        }
+                                    }
+                                },
                                 onDelete = { viewModel.deleteTemplate(template) }
                             )
                         }
                     }
                     Spacer(modifier = Modifier.height(16.dp))
-                    Button(
-                        onClick = { pdfPicker.launch(arrayOf("application/pdf")) },
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Add, null, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Create New Template")
+                        Button(
+                            onClick = { pdfPicker.launch(arrayOf("application/pdf")) },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Add, null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Create New")
+                        }
+                        OutlinedButton(
+                            onClick = { importPicker.launch(arrayOf("application/zip", "application/octet-stream")) },
+                            enabled = !isImporting,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.FileOpen, null, modifier = Modifier.size(20.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (isImporting) "Importing..." else "Import")
+                        }
                     }
                 }
             }
@@ -229,6 +335,7 @@ fun TemplateCard(
     template: FormTemplate,
     onFill: () -> Unit,
     onEdit: () -> Unit,
+    onExport: () -> Unit,
     onDelete: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
@@ -284,6 +391,14 @@ fun TemplateCard(
                         onClick = {
                             showMenu = false
                             onEdit()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("Export Template") },
+                        leadingIcon = { Icon(Icons.Default.Share, null) },
+                        onClick = {
+                            showMenu = false
+                            onExport()
                         }
                     )
                     DropdownMenuItem(
@@ -1942,6 +2057,114 @@ fun ReorderFieldsScreen(
             }
         }
     }
+}
+
+suspend fun exportTemplateToZip(
+    context: android.content.Context,
+    template: FormTemplate,
+    viewModel: PdfViewModel
+): File? = withContext(Dispatchers.IO) {
+    val sourceFile = File(template.sourceFilePath)
+    if (!sourceFile.exists()) return@withContext null
+
+    val fields = viewModel.getTemplateFields(template.id)
+
+    val meta = JSONObject().apply {
+        put("name", template.name)
+        put("pageCount", template.pageCount)
+        put("version", 1)
+        val fieldsArray = JSONArray()
+        fields.forEach { f ->
+            fieldsArray.put(JSONObject().apply {
+                put("fieldName", f.fieldName)
+                put("fieldType", f.fieldType)
+                put("pageNumber", f.pageNumber)
+                put("relativeX", f.relativeX.toDouble())
+                put("relativeY", f.relativeY.toDouble())
+                put("relativeWidth", f.relativeWidth.toDouble())
+                put("relativeHeight", f.relativeHeight.toDouble())
+                put("sortOrder", f.sortOrder)
+            })
+        }
+        put("fields", fieldsArray)
+    }
+
+    val zipFile = File(context.cacheDir, "export_${System.currentTimeMillis()}.zip")
+    ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zos ->
+        zos.putNextEntry(ZipEntry("template.json"))
+        zos.write(meta.toString(2).toByteArray())
+        zos.closeEntry()
+
+        zos.putNextEntry(ZipEntry("source.pdf"))
+        FileInputStream(sourceFile).use { fis -> fis.copyTo(zos) }
+        zos.closeEntry()
+    }
+
+    zipFile
+}
+
+suspend fun importTemplateFromZip(
+    context: android.content.Context,
+    uri: Uri,
+    viewModel: PdfViewModel
+): String = withContext(Dispatchers.IO) {
+    var metaJson: String? = null
+    var pdfBytes: ByteArray? = null
+
+    context.contentResolver.openInputStream(uri)?.use { inputStream ->
+        ZipInputStream(inputStream).use { zis ->
+            var entry = zis.nextEntry
+            while (entry != null) {
+                when (entry.name) {
+                    "template.json" -> {
+                        metaJson = zis.readBytes().toString(Charsets.UTF_8)
+                    }
+                    "source.pdf" -> {
+                        pdfBytes = zis.readBytes()
+                    }
+                }
+                zis.closeEntry()
+                entry = zis.nextEntry
+            }
+        }
+    }
+
+    if (metaJson == null || pdfBytes == null) {
+        return@withContext "Invalid template file: missing data"
+    }
+
+    val meta = JSONObject(metaJson!!)
+    val name = meta.getString("name")
+    val pageCount = meta.getInt("pageCount")
+
+    val templateDir = File(context.filesDir, "templates")
+    templateDir.mkdirs()
+    val destFile = File(templateDir, "template_${System.currentTimeMillis()}.pdf")
+    FileOutputStream(destFile).use { fos -> fos.write(pdfBytes!!) }
+
+    val templateId = viewModel.addTemplate(name, destFile.absolutePath, pageCount).toInt()
+
+    val fieldsArray = meta.getJSONArray("fields")
+    val templateFields = mutableListOf<TemplateField>()
+    for (i in 0 until fieldsArray.length()) {
+        val fObj = fieldsArray.getJSONObject(i)
+        templateFields.add(
+            TemplateField(
+                templateId = templateId,
+                fieldName = fObj.getString("fieldName"),
+                fieldType = fObj.getString("fieldType"),
+                pageNumber = fObj.getInt("pageNumber"),
+                relativeX = fObj.getDouble("relativeX").toFloat(),
+                relativeY = fObj.getDouble("relativeY").toFloat(),
+                relativeWidth = fObj.getDouble("relativeWidth").toFloat(),
+                relativeHeight = fObj.getDouble("relativeHeight").toFloat(),
+                sortOrder = fObj.optInt("sortOrder", i)
+            )
+        )
+    }
+    viewModel.saveTemplateFields(templateId, templateFields)
+
+    "Template \"$name\" imported successfully!"
 }
 
 suspend fun renderPdfToBitmaps(file: File): List<Bitmap> = withContext(Dispatchers.IO) {

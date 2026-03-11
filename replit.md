@@ -48,6 +48,7 @@ The application is built with Kotlin and utilizes Jetpack Compose with Material 
   - **Auto-Detect Fields**: ML Kit OCR scans the form for labels (name, date, signature, address, etc.) and auto-places input fields next to them.
   - **Precise Dimensions**: Field size via slider or exact measurements in inches, cm, or mm with real-time conversion.
   - **Field Reorder**: Reorder fields for fill mode via up/down arrows in a dedicated reorder screen (list icon in fill screen top bar). Custom sort order persisted in database (`sortOrder` column on `TemplateField`). Useful for multi-column forms where default top-to-bottom order interleaves columns.
+  - **Export/Import Templates**: Export a template as a `.dtp.zip` file (contains source PDF + field definitions as JSON). Import on another device to recreate the template with all field mappings and sort order. Accessible from template card overflow menu (Export) and template list buttons (Import).
 - **Document Management**: Features include naming dialogs with OCR suggestions, rename, delete, and category management via overflow menus. All tools (split, compress, OCR, merge, sign, annotate) accessible from document overflow menu on Home screen.
 - **Database**: Room v4 includes `PdfDocument` entity with category support, `Bookmark` entity, `FormTemplate` entity, and `TemplateField` entity (FK with CASCADE delete, `sortOrder` column for fill order).
 - **Device Compatibility**: Targets Android 7.0 (API 24) to Android 14 (API 34), supporting various screen sizes.
