@@ -103,7 +103,8 @@ data class TemplateField(
     val relativeX: Float,
     val relativeY: Float,
     val relativeWidth: Float,
-    val relativeHeight: Float
+    val relativeHeight: Float,
+    val sortOrder: Int = 0
 )
 
 @Dao
@@ -165,11 +166,14 @@ interface FormTemplateDao {
 
 @Dao
 interface TemplateFieldDao {
-    @Query("SELECT * FROM template_fields WHERE templateId = :templateId ORDER BY pageNumber ASC, relativeY ASC")
+    @Query("SELECT * FROM template_fields WHERE templateId = :templateId ORDER BY sortOrder ASC, pageNumber ASC, relativeY ASC")
     suspend fun getFieldsForTemplate(templateId: Int): List<TemplateField>
     
-    @Query("SELECT * FROM template_fields WHERE templateId = :templateId ORDER BY pageNumber ASC, relativeY ASC")
+    @Query("SELECT * FROM template_fields WHERE templateId = :templateId ORDER BY sortOrder ASC, pageNumber ASC, relativeY ASC")
     fun getFieldsForTemplateFlow(templateId: Int): Flow<List<TemplateField>>
+    
+    @Update
+    suspend fun updateFields(fields: List<TemplateField>)
     
     @Insert
     suspend fun insertAll(fields: List<TemplateField>)
@@ -186,7 +190,7 @@ interface TemplateFieldDao {
 
 @Database(
     entities = [Bookmark::class, StoredPdfDocument::class, FormTemplate::class, TemplateField::class],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -198,6 +202,12 @@ abstract class AppDatabase : RoomDatabase() {
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
+
+        private val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE template_fields ADD COLUMN sortOrder INTEGER NOT NULL DEFAULT 0")
+            }
+        }
         
         fun getDatabase(context: android.content.Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
@@ -206,6 +216,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "pdf_composer_database"
                 )
+                .addMigrations(MIGRATION_3_4)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance
@@ -294,6 +305,10 @@ class PdfViewModel(
 
     suspend fun saveTemplateFields(templateId: Int, fields: List<TemplateField>) {
         templateFieldDao.replaceFieldsForTemplate(templateId, fields)
+    }
+
+    suspend fun updateFieldOrder(fields: List<TemplateField>) {
+        templateFieldDao.updateFields(fields)
     }
     
     suspend fun getTemplateFields(templateId: Int): List<TemplateField> {

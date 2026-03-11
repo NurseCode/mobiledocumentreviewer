@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -467,7 +468,7 @@ fun TemplateFieldPlacementScreen(
                                             sourceFile.copyTo(destFile, overwrite = true)
                                             viewModel.addTemplate(templateName, destFile.absolutePath, pageCount).toInt()
                                         }
-                                        val templateFields = fields.map { f ->
+                                        val templateFields = fields.mapIndexed { index, f ->
                                             TemplateField(
                                                 templateId = templateId,
                                                 fieldName = f.name,
@@ -476,7 +477,8 @@ fun TemplateFieldPlacementScreen(
                                                 relativeX = f.x,
                                                 relativeY = f.y,
                                                 relativeWidth = f.width,
-                                                relativeHeight = f.height
+                                                relativeHeight = f.height,
+                                                sortOrder = index
                                             )
                                         }
                                         viewModel.saveTemplateFields(templateId, templateFields)
@@ -959,7 +961,7 @@ fun TemplateFieldPlacementScreen(
                                     val destFile = File(templateDir, "template_${System.currentTimeMillis()}.pdf")
                                     sourceFile.copyTo(destFile, overwrite = true)
                                     val templateId = viewModel.addTemplate(templateName, destFile.absolutePath, pageCount).toInt()
-                                    val templateFields = fields.map { f ->
+                                    val templateFields = fields.mapIndexed { index, f ->
                                         TemplateField(
                                             templateId = templateId,
                                             fieldName = f.name,
@@ -968,7 +970,8 @@ fun TemplateFieldPlacementScreen(
                                             relativeX = f.x,
                                             relativeY = f.y,
                                             relativeWidth = f.width,
-                                            relativeHeight = f.height
+                                            relativeHeight = f.height,
+                                            sortOrder = index
                                         )
                                     }
                                     viewModel.saveTemplateFields(templateId, templateFields)
@@ -1193,6 +1196,7 @@ fun TemplateFillScreen(
     val signatureBitmaps = remember { mutableStateMapOf<Int, Bitmap>() }
     val checkboxValues = remember { mutableStateMapOf<Int, Boolean>() }
     var isGenerating by remember { mutableStateOf(false) }
+    var showReorder by rememberSaveable { mutableStateOf(false) }
     var showPreview by rememberSaveable { mutableStateOf(false) }
     var previewFile by remember { mutableStateOf<File?>(null) }
     var previewBitmaps by remember { mutableStateOf<List<Bitmap>>(emptyList()) }
@@ -1218,6 +1222,8 @@ fun TemplateFillScreen(
             previewFile?.delete()
             previewFile = null
             previewBitmaps = emptyList()
+        } else if (showReorder) {
+            showReorder = false
         } else if (showSignPad) {
             showSignPad = false
         } else {
@@ -1232,6 +1238,19 @@ fun TemplateFillScreen(
                 signatureBitmaps[signFieldId] = bitmap
                 showSignPad = false
             }
+        )
+        return
+    }
+
+    if (showReorder) {
+        ReorderFieldsScreen(
+            fields = fields,
+            viewModel = viewModel,
+            onDone = { reorderedFields ->
+                fields = reorderedFields
+                showReorder = false
+            },
+            onCancel = { showReorder = false }
         )
         return
     }
@@ -1276,6 +1295,11 @@ fun TemplateFillScreen(
                     IconButton(onClick = onCancel) {
                         Icon(Icons.Default.Close, "Cancel")
                     }
+                },
+                actions = {
+                    IconButton(onClick = { showReorder = true }) {
+                        Icon(Icons.Default.List, "Reorder Fields")
+                    }
                 }
             )
 
@@ -1286,20 +1310,7 @@ fun TemplateFillScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(vertical = 12.dp)
             ) {
-                val groupedFields = fields.groupBy { it.pageNumber }
-                groupedFields.entries.sortedBy { it.key }.forEach { (page, pageFields) ->
-                    item {
-                        if (groupedFields.size > 1) {
-                            Text(
-                                "Page ${page + 1}",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = if (page > 0) 8.dp else 0.dp)
-                            )
-                        }
-                    }
-                    items(pageFields) { field ->
+                items(fields) { field ->
                         when (field.fieldType) {
                             "text" -> {
                                 OutlinedTextField(
@@ -1392,9 +1403,15 @@ fun TemplateFillScreen(
                                 }
                             }
                         }
-                    }
                 }
             }
+
+            Text(
+                "Tap the list icon above to reorder fields",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
+            )
 
             if (isGenerating) {
                 LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -1785,6 +1802,145 @@ suspend fun generateFilledPdf(
     } catch (e: Exception) {
         e.printStackTrace()
         null
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReorderFieldsScreen(
+    fields: List<TemplateField>,
+    viewModel: PdfViewModel,
+    onDone: (List<TemplateField>) -> Unit,
+    onCancel: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val reorderList = remember { mutableStateListOf<TemplateField>().also { it.addAll(fields) } }
+    var isSaving by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            TopAppBar(
+                title = { Text("Reorder Fields") },
+                navigationIcon = {
+                    IconButton(onClick = onCancel) {
+                        Icon(Icons.Default.Close, "Cancel")
+                    }
+                },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            isSaving = true
+                            scope.launch {
+                                try {
+                                    val updated = reorderList.mapIndexed { index, field ->
+                                        field.copy(sortOrder = index)
+                                    }
+                                    viewModel.updateFieldOrder(updated)
+                                    onDone(updated)
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "Failed to save order: ${e.message}", Toast.LENGTH_SHORT).show()
+                                    isSaving = false
+                                }
+                            }
+                        },
+                        enabled = !isSaving
+                    ) {
+                        Text("Save Order")
+                    }
+                }
+            )
+
+            Text(
+                "Drag fields to set the order they appear when filling the form. Use the arrows to move fields up or down.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+
+            LazyColumn(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                itemsIndexed(reorderList) { index, field ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                "${index + 1}.",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.width(36.dp)
+                            )
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    field.fieldName,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    "${field.fieldType.replaceFirstChar { it.uppercase() }} - Page ${field.pageNumber + 1}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            Column {
+                                IconButton(
+                                    onClick = {
+                                        if (index > 0) {
+                                            val item = reorderList.removeAt(index)
+                                            reorderList.add(index - 1, item)
+                                        }
+                                    },
+                                    enabled = index > 0
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowUp,
+                                        "Move up",
+                                        tint = if (index > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        if (index < reorderList.size - 1) {
+                                            val item = reorderList.removeAt(index)
+                                            reorderList.add(index + 1, item)
+                                        }
+                                    },
+                                    enabled = index < reorderList.size - 1
+                                ) {
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        "Move down",
+                                        tint = if (index < reorderList.size - 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
