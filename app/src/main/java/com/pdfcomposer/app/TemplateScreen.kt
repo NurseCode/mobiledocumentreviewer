@@ -12,7 +12,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -535,56 +534,9 @@ fun TemplateFieldPlacementScreen(
                         modifier = Modifier
                             .fillMaxSize()
                             .pointerInput(currentPage, selectedFieldId, fields.toList()) {
-                                detectTapGestures(
-                                    onDoubleTap = { offset ->
-                                        val pdfBmp = pdfBitmap ?: return@detectTapGestures
-                                        val pScale = minOf(size.width.toFloat() / pdfBmp.width.toFloat(), size.height.toFloat() / pdfBmp.height.toFloat())
-                                        val pW = pdfBmp.width * pScale
-                                        val pH = pdfBmp.height * pScale
-                                        val pLeft = (size.width - pW) / 2f
-                                        val pTop = (size.height - pH) / 2f
-                                        val contentX = (offset.x - panOffset.x - size.width / 2f * (1f - zoomScale)) / zoomScale
-                                        val contentY = (offset.y - panOffset.y - size.height / 2f * (1f - zoomScale)) / zoomScale
-                                        val relX = ((contentX - pLeft) / pW).coerceIn(0f, 1f)
-                                        val relY = ((contentY - pTop) / pH).coerceIn(0f, 1f)
-                                        val tappedField = pageFields.find { f ->
-                                            relX >= f.x && relX <= f.x + f.width && relY >= f.y && relY <= f.y + f.height
-                                        }
-                                        if (tappedField != null) {
-                                            selectedFieldId = tappedField.id
-                                            editingField = tappedField
-                                            showFieldDialog = true
-                                        }
-                                    },
-                                    onTap = { offset ->
-                                        val pdfBmp = pdfBitmap ?: return@detectTapGestures
-                                        val pScale = minOf(size.width.toFloat() / pdfBmp.width.toFloat(), size.height.toFloat() / pdfBmp.height.toFloat())
-                                        val pW = pdfBmp.width * pScale
-                                        val pH = pdfBmp.height * pScale
-                                        val pLeft = (size.width - pW) / 2f
-                                        val pTop = (size.height - pH) / 2f
-                                        val contentX = (offset.x - panOffset.x - size.width / 2f * (1f - zoomScale)) / zoomScale
-                                        val contentY = (offset.y - panOffset.y - size.height / 2f * (1f - zoomScale)) / zoomScale
-                                        val relX = ((contentX - pLeft) / pW).coerceIn(0f, 1f)
-                                        val relY = ((contentY - pTop) / pH).coerceIn(0f, 1f)
-                                        val tappedField = pageFields.find { f ->
-                                            relX >= f.x && relX <= f.x + f.width && relY >= f.y && relY <= f.y + f.height
-                                        }
-                                        if (tappedField != null) {
-                                            selectedFieldId = if (selectedFieldId == tappedField.id) null else tappedField.id
-                                        } else if (selectedFieldId != null) {
-                                            selectedFieldId = null
-                                        } else {
-                                            pendingFieldPosition = Pair(relX, relY)
-                                            editingField = null
-                                            showFieldDialog = true
-                                        }
-                                    }
-                                )
-                            }
-                            .pointerInput(currentPage, selectedFieldId, fields.toList()) {
                                 awaitEachGesture {
                                     val firstDown = awaitFirstDown(requireUnconsumed = false)
+                                    firstDown.consume()
                                     val pdfBmp = pdfBitmap ?: return@awaitEachGesture
                                     val pScale = minOf(size.width.toFloat() / pdfBmp.width.toFloat(), size.height.toFloat() / pdfBmp.height.toFloat())
                                     val pW = pdfBmp.width * pScale
@@ -593,6 +545,7 @@ fun TemplateFieldPlacementScreen(
                                     val pTop = (size.height - pH) / 2f
                                     val canvasW = size.width.toFloat()
                                     val canvasH = size.height.toFloat()
+                                    val dragThreshold = 12f
 
                                     fun screenToContent(sx: Float, sy: Float): Offset {
                                         val cx = (sx - panOffset.x - canvasW / 2f * (1f - zoomScale)) / zoomScale
@@ -600,7 +553,8 @@ fun TemplateFieldPlacementScreen(
                                         return Offset(cx, cy)
                                     }
 
-                                    val startContent = screenToContent(firstDown.position.x, firstDown.position.y)
+                                    val startPos = firstDown.position
+                                    val startContent = screenToContent(startPos.x, startPos.y)
                                     val startRelX = (startContent.x - pLeft) / pW
                                     val startRelY = (startContent.y - pTop) / pH
 
@@ -652,20 +606,44 @@ fun TemplateFieldPlacementScreen(
                                         }
                                     }
 
-                                    var prevCentroid = firstDown.position
+                                    var prevCentroid = startPos
                                     var prevSpread = 0f
                                     var isMultitouch = false
+                                    var totalDragDist = 0f
+                                    var gestureFinished = false
 
-                                    while (true) {
+                                    while (!gestureFinished) {
                                         val event = awaitPointerEvent()
-                                        if (event.type == PointerEventType.Release) {
-                                            if (event.changes.all { !it.pressed }) break
+                                        val allUp = event.changes.none { it.pressed }
+
+                                        if (allUp) {
+                                            if (!isMultitouch && totalDragDist < dragThreshold) {
+                                                val contentPt = screenToContent(startPos.x, startPos.y)
+                                                val relX = ((contentPt.x - pLeft) / pW).coerceIn(0f, 1f)
+                                                val relY = ((contentPt.y - pTop) / pH).coerceIn(0f, 1f)
+                                                val tappedField = pageFields.find { f ->
+                                                    relX >= f.x && relX <= f.x + f.width && relY >= f.y && relY <= f.y + f.height
+                                                }
+                                                if (tappedField != null) {
+                                                    selectedFieldId = if (selectedFieldId == tappedField.id) null else tappedField.id
+                                                } else if (selectedFieldId != null) {
+                                                    selectedFieldId = null
+                                                } else {
+                                                    pendingFieldPosition = Pair(relX, relY)
+                                                    editingField = null
+                                                    showFieldDialog = true
+                                                }
+                                            }
+                                            event.changes.forEach { it.consume() }
+                                            gestureFinished = true
                                             continue
                                         }
-                                        if (event.type != PointerEventType.Move) continue
 
                                         val activePointers = event.changes.filter { it.pressed }
-                                        if (activePointers.isEmpty()) break
+                                        if (activePointers.isEmpty()) {
+                                            gestureFinished = true
+                                            continue
+                                        }
 
                                         if (activePointers.size >= 2) {
                                             isMultitouch = true
@@ -696,83 +674,85 @@ fun TemplateFieldPlacementScreen(
                                             prevSpread = spread
                                             activePointers.forEach { it.consume() }
 
-                                        } else if (!isMultitouch && dragMode != null) {
+                                        } else if (!isMultitouch) {
                                             val pointer = activePointers[0]
                                             val delta = pointer.positionChange()
+                                            val dist = kotlin.math.sqrt(delta.x * delta.x + delta.y * delta.y)
+                                            totalDragDist += dist
                                             pointer.consume()
 
-                                            val dRelX = delta.x / (pW * zoomScale)
-                                            val dRelY = delta.y / (pH * zoomScale)
-                                            val parts = dragMode!!.split(":")
-                                            val mode = parts[0]
+                                            if (totalDragDist >= dragThreshold) {
+                                                if (dragMode != null) {
+                                                    val dRelX = delta.x / (pW * zoomScale)
+                                                    val dRelY = delta.y / (pH * zoomScale)
+                                                    val parts = dragMode!!.split(":")
+                                                    val mode = parts[0]
 
-                                            if (mode == "move") {
-                                                val fId = parts[1]
-                                                val idx = fields.indexOfFirst { it.id == fId }
-                                                if (idx >= 0) {
-                                                    val f = fields[idx]
-                                                    fields[idx] = f.copy(
-                                                        x = (f.x + dRelX).coerceIn(0f, 1f - f.width),
-                                                        y = (f.y + dRelY).coerceIn(0f, 1f - f.height)
-                                                    )
-                                                }
-                                            } else if (mode == "handle" && parts.size >= 3) {
-                                                val handle = parts[1]
-                                                val fId = parts[2]
-                                                val idx = fields.indexOfFirst { it.id == fId }
-                                                if (idx >= 0) {
-                                                    val f = fields[idx]
-                                                    val right = f.x + f.width
-                                                    val bottom = f.y + f.height
-                                                    when (handle) {
-                                                        "tl" -> {
-                                                            val nx = (f.x + dRelX).coerceIn(0f, right - minFieldRel)
-                                                            val ny = (f.y + dRelY).coerceIn(0f, bottom - minFieldRel)
-                                                            fields[idx] = f.copy(x = nx, y = ny, width = right - nx, height = bottom - ny)
+                                                    if (mode == "move") {
+                                                        val fId = parts[1]
+                                                        val idx = fields.indexOfFirst { it.id == fId }
+                                                        if (idx >= 0) {
+                                                            val f = fields[idx]
+                                                            fields[idx] = f.copy(
+                                                                x = (f.x + dRelX).coerceIn(0f, 1f - f.width),
+                                                                y = (f.y + dRelY).coerceIn(0f, 1f - f.height)
+                                                            )
                                                         }
-                                                        "tr" -> {
-                                                            val nw = (f.width + dRelX).coerceIn(minFieldRel, 1f - f.x)
-                                                            val ny = (f.y + dRelY).coerceIn(0f, bottom - minFieldRel)
-                                                            fields[idx] = f.copy(y = ny, width = nw, height = bottom - ny)
-                                                        }
-                                                        "bl" -> {
-                                                            val nx = (f.x + dRelX).coerceIn(0f, right - minFieldRel)
-                                                            val nh = (f.height + dRelY).coerceIn(minFieldRel, 1f - f.y)
-                                                            fields[idx] = f.copy(x = nx, width = right - nx, height = nh)
-                                                        }
-                                                        "br" -> {
-                                                            val nw = (f.width + dRelX).coerceIn(minFieldRel, 1f - f.x)
-                                                            val nh = (f.height + dRelY).coerceIn(minFieldRel, 1f - f.y)
-                                                            fields[idx] = f.copy(width = nw, height = nh)
-                                                        }
-                                                        "tm" -> {
-                                                            val ny = (f.y + dRelY).coerceIn(0f, bottom - minFieldRel)
-                                                            fields[idx] = f.copy(y = ny, height = bottom - ny)
-                                                        }
-                                                        "bm" -> {
-                                                            val nh = (f.height + dRelY).coerceIn(minFieldRel, 1f - f.y)
-                                                            fields[idx] = f.copy(height = nh)
-                                                        }
-                                                        "ml" -> {
-                                                            val nx = (f.x + dRelX).coerceIn(0f, right - minFieldRel)
-                                                            fields[idx] = f.copy(x = nx, width = right - nx)
-                                                        }
-                                                        "mr" -> {
-                                                            val nw = (f.width + dRelX).coerceIn(minFieldRel, 1f - f.x)
-                                                            fields[idx] = f.copy(width = nw)
+                                                    } else if (mode == "handle" && parts.size >= 3) {
+                                                        val handle = parts[1]
+                                                        val fId = parts[2]
+                                                        val idx = fields.indexOfFirst { it.id == fId }
+                                                        if (idx >= 0) {
+                                                            val f = fields[idx]
+                                                            val right = f.x + f.width
+                                                            val bottom = f.y + f.height
+                                                            when (handle) {
+                                                                "tl" -> {
+                                                                    val nx = (f.x + dRelX).coerceIn(0f, right - minFieldRel)
+                                                                    val ny = (f.y + dRelY).coerceIn(0f, bottom - minFieldRel)
+                                                                    fields[idx] = f.copy(x = nx, y = ny, width = right - nx, height = bottom - ny)
+                                                                }
+                                                                "tr" -> {
+                                                                    val nw = (f.width + dRelX).coerceIn(minFieldRel, 1f - f.x)
+                                                                    val ny = (f.y + dRelY).coerceIn(0f, bottom - minFieldRel)
+                                                                    fields[idx] = f.copy(y = ny, width = nw, height = bottom - ny)
+                                                                }
+                                                                "bl" -> {
+                                                                    val nx = (f.x + dRelX).coerceIn(0f, right - minFieldRel)
+                                                                    val nh = (f.height + dRelY).coerceIn(minFieldRel, 1f - f.y)
+                                                                    fields[idx] = f.copy(x = nx, width = right - nx, height = nh)
+                                                                }
+                                                                "br" -> {
+                                                                    val nw = (f.width + dRelX).coerceIn(minFieldRel, 1f - f.x)
+                                                                    val nh = (f.height + dRelY).coerceIn(minFieldRel, 1f - f.y)
+                                                                    fields[idx] = f.copy(width = nw, height = nh)
+                                                                }
+                                                                "tm" -> {
+                                                                    val ny = (f.y + dRelY).coerceIn(0f, bottom - minFieldRel)
+                                                                    fields[idx] = f.copy(y = ny, height = bottom - ny)
+                                                                }
+                                                                "bm" -> {
+                                                                    val nh = (f.height + dRelY).coerceIn(minFieldRel, 1f - f.y)
+                                                                    fields[idx] = f.copy(height = nh)
+                                                                }
+                                                                "ml" -> {
+                                                                    val nx = (f.x + dRelX).coerceIn(0f, right - minFieldRel)
+                                                                    fields[idx] = f.copy(x = nx, width = right - nx)
+                                                                }
+                                                                "mr" -> {
+                                                                    val nw = (f.width + dRelX).coerceIn(minFieldRel, 1f - f.x)
+                                                                    fields[idx] = f.copy(width = nw)
+                                                                }
+                                                            }
                                                         }
                                                     }
+                                                } else {
+                                                    panOffset = Offset(
+                                                        panOffset.x + delta.x,
+                                                        panOffset.y + delta.y
+                                                    )
                                                 }
                                             }
-
-                                        } else if (!isMultitouch && dragMode == null) {
-                                            val pointer = activePointers[0]
-                                            val delta = pointer.positionChange()
-                                            pointer.consume()
-                                            panOffset = Offset(
-                                                panOffset.x + delta.x,
-                                                panOffset.y + delta.y
-                                            )
                                         }
                                     }
                                 }
